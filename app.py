@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, text
 
 # --- 1. CẤU HÌNH GIAO DIỆN WEB ---
 st.set_page_config(page_title="LFS - Trợ lý Bất động sản", page_icon="🏡", layout="wide")
-st.title("🏡 Hệ thống LFS 6.0 - Trợ lý Ảo Toàn Diện")
+st.title("🏡 Hệ thống LFS 6.1 - Trợ lý Ảo Toàn Diện")
 st.markdown("Matching tự động, tạo kịch bản Zalo & Quản lý lịch sử xem nhà trực tuyến.")
 
 # --- 2. CẤU HÌNH BẢO MẬT ---
@@ -80,7 +80,7 @@ if sheet_url:
         st.success(f"✅ Đã kết nối rổ hàng. Quét thành công {len(properties)} sản phẩm.")
         
         # --- TẠO TAB ĐỂ GIAO DIỆN GỌN GÀNG HƠN ---
-        tab1, tab2 = st.tabs(["🎯 Khớp Lệnh & Chốt Sale", "🕵️ Quản Lý Khách Xem Hôm Nay"])
+        tab1, tab2 = st.tabs(["🎯 Khớp Lệnh & Chốt Sale", "🕵️ Quản Lý & Cập Nhật Lịch Sử"])
         
         with tab1:
             st.markdown("### 📊 Tổng quan Giỏ hàng")
@@ -185,7 +185,6 @@ if sheet_url:
                             st.write("**📸 Hình ảnh thực tế:**")
                             if pd.notna(best_match['image_url']) and str(best_match['image_url']).strip() != "":
                                 img_val = str(best_match['image_url']).strip()
-                                # BỘ LỌC CHỐNG LỖI ẢNH MÁY TÍNH
                                 if img_val.startswith("http"):
                                     st.image(img_val, use_container_width=True)
                                 else:
@@ -204,11 +203,10 @@ if sheet_url:
                             st.text_area("", response.text, height=120, label_visibility="collapsed")
                         
         # ========================================================
-        # TAB 2: QUẢN LÝ LỊCH SỬ DẪN KHÁCH HÔM NAY
+        # TAB 2: QUẢN LÝ LỊCH SỬ DẪN KHÁCH HÔM NAY VÀ XÓA DỮ LIỆU
         # ========================================================
         with tab2:
             st.subheader("🕵️ Tra cứu lịch sử tư vấn / xem nhà")
-            st.markdown("Hệ thống sẽ đồng bộ với CSDL Đám mây Supabase để tìm kiếm toàn bộ lịch sử khớp lệnh của khách hàng.")
             
             search_name = st.text_input("Nhập tên khách hàng cần tra cứu (VD: Anh Nguyễn Văn A):", key="search_crm")
             
@@ -223,17 +221,15 @@ if sheet_url:
                             engine_url = db_url.replace("postgresql://", "postgresql+psycopg2://")
                             engine = create_engine(engine_url)
                             
-                            # Dùng câu lệnh SQL truy vấn trực tiếp tên khách hàng (không phân biệt hoa thường)
                             query = f"SELECT thoi_gian, can_ho_de_xuat, ngan_sach, do_phu_hop FROM crm_khach_hang WHERE ten_khach_hang ILIKE '%%{search_name}%%' ORDER BY thoi_gian DESC"
                             history_df = pd.read_sql(query, engine)
 
                             if not history_df.empty:
-                                # Lọc ra các căn nhà đã xem TRONG HÔM NAY
                                 today_str = datetime.datetime.now().strftime("%Y-%m-%d")
                                 history_df['Ngày'] = pd.to_datetime(history_df['thoi_gian']).dt.strftime('%Y-%m-%d')
                                 today_df = history_df[history_df['Ngày'] == today_str]
                                 
-                                st.success(f"Đã tìm thấy tổng cộng **{len(history_df)}** lần tư vấn cho khách hàng này trên hệ thống.")
+                                st.success(f"Đã tìm thấy **{len(history_df)}** lần tư vấn cho khách hàng này trên hệ thống.")
                                 
                                 st.markdown(f"### 📍 Các căn nhà đã xem HÔM NAY ({today_str}):")
                                 if not today_df.empty:
@@ -251,7 +247,37 @@ if sheet_url:
                             else:
                                 st.warning("Chưa tìm thấy dữ liệu hoặc khách hàng chưa từng được tư vấn trên hệ thống.")
                         except Exception as e:
-                            st.error("Lỗi truy xuất dữ liệu từ Supabase. Đảm bảo bạn đã từng Khớp Lệnh ít nhất 1 lần để hệ thống tự tạo Bảng CRM.")
+                            st.error("Lỗi truy xuất dữ liệu từ Supabase.")
+                            st.write(e)
+            
+            # --- TÍNH NĂNG XÓA DỮ LIỆU ---
+            st.divider()
+            st.markdown("### 🗑️ Xóa Hồ Sơ Khách Hàng")
+            st.warning("Hành động này sẽ xóa vĩnh viễn toàn bộ lịch sử tư vấn của khách hàng bạn nhập dưới đây khỏi Cơ sở dữ liệu đám mây.")
+            
+            del_name = st.text_input("Nhập CHÍNH XÁC tên khách hàng cần xóa:")
+            if st.button("🚨 Xóa Vĩnh Viễn Dữ Liệu"):
+                if not db_url:
+                    st.warning("Vui lòng nhập Supabase URI ở menu bên trái trước!")
+                elif not del_name:
+                    st.warning("Vui lòng nhập tên khách hàng cần xóa.")
+                else:
+                    with st.spinner(f"Đang xóa hồ sơ của {del_name}..."):
+                        try:
+                            engine_url = db_url.replace("postgresql://", "postgresql+psycopg2://")
+                            engine = create_engine(engine_url)
+                            # Kết nối và thực thi lệnh xóa an toàn
+                            with engine.begin() as conn:
+                                sql = text("DELETE FROM crm_khach_hang WHERE ten_khach_hang = :name")
+                                result = conn.execute(sql, {"name": del_name})
+                                deleted_rows = result.rowcount
+                            
+                            if deleted_rows > 0:
+                                st.success(f"✅ Đã xóa thành công {deleted_rows} dòng dữ liệu của khách '{del_name}' khỏi hệ thống!")
+                            else:
+                                st.info("Không tìm thấy dữ liệu nào khớp với tên này. Hãy chắc chắn bạn nhập chính xác tên khách hàng (bao gồm cả chữ hoa/thường).")
+                        except Exception as e:
+                            st.error("Lỗi khi xóa dữ liệu.")
                             st.write(e)
 
     except Exception as e:
