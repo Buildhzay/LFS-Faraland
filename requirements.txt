@@ -2,6 +2,6 @@ streamlit
 pandas
 scikit-learn
 google-genai
-streamlit-gsheets
+st-gsheets-connection
 SQLAlchemy
 psycopg2-binary
