@@ -5,3 +5,4 @@ google-genai
 st-gsheets-connection
 SQLAlchemy
 psycopg2-binary
+plotly
