@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import datetime
 import json
+import re
 import plotly.express as px
 from sklearn.preprocessing import MinMaxScaler
 from google import genai
@@ -43,8 +44,8 @@ if not st.session_state['logged_in']:
 # GIAO DIỆN HỆ THỐNG CHÍNH
 # ==========================================
 else:
-    st.title("🏡 Hệ thống LFS 10.0 - Trợ lý Ảo AI Toàn Diện")
-    st.markdown("Dashboard điều hành, AI Khớp lệnh, Quản lý CRM & AI Gợi ý giao tiếp Zalo.")
+    st.title("🏡 Hệ thống LFS 11.0 - Trợ lý Ảo AI Toàn Diện")
+    st.markdown("Dashboard điều hành, AI Khớp lệnh, Quản lý CRM & Báo cáo Tự động.")
 
     # --- NÚT ĐĂNG XUẤT ---
     st.sidebar.markdown("### 👤 Tài khoản: Admin")
@@ -60,6 +61,18 @@ else:
     db_url = st.sidebar.text_input("3. Supabase URI (Lưu CRM):", type="password")
 
     # ==========================================
+    # HÀM LÀM SẠCH VÀ CHUYỂN ĐỔI LINK ẢNH (Hỗ trợ số 1)
+    # ==========================================
+    def process_image_url(url):
+        url = str(url).strip()
+        # Nếu là link Google Drive, tự động bẻ khóa thành link hiển thị trực tiếp
+        if "drive.google.com" in url:
+            match = re.search(r'/d/([a-zA-Z0-9_-]+)', url)
+            if match:
+                file_id = match.group(1)
+                return f"https://drive.google.com/uc?id={file_id}"
+        return url
+
     def clean_currency(x):
         if pd.isna(x): return np.nan
         s = str(x).lower().replace(' ', '')
@@ -86,7 +99,6 @@ else:
             return float(s)
         except:
             return np.nan
-    # ==========================================
 
     # --- 3. ĐỌC KHO HÀNG ---
     @st.cache_data(ttl=60) 
@@ -121,11 +133,11 @@ else:
             st.success(f"✅ Đã kết nối rổ hàng. Quét thành công {len(properties)} sản phẩm.")
             
             # TẠO 3 TAB CHUYÊN NGHIỆP
-            tab1, tab2, tab3 = st.tabs(["🚀 Phòng Điều Hành & Khớp Lệnh", "🕵️ Quản Lý Lịch Sử CRM", "💡 AI Gợi Ý Giao Tiếp"])
+            tab1, tab2, tab3 = st.tabs(["🚀 Khớp Lệnh & Chỉ Huy", "📊 Quản Lý CRM & Báo Cáo", "💡 AI Gợi Ý Giao Tiếp"])
             
             with tab1:
                 # ==========================================
-                # PHÒNG ĐIỀU HÀNH: DASHBOARD TỔNG QUAN & BIỂU ĐỒ
+                # PHÒNG ĐIỀU HÀNH
                 # ==========================================
                 st.markdown("### 📊 Tổng quan Giỏ hàng Faraland")
                 col_db1, col_db2, col_db3 = st.columns(3)
@@ -139,43 +151,32 @@ else:
                     if len(properties) > 0: st.metric(label="Phân khúc chủ đạo", value=str(properties['property_type'].mode()[0]))
                     else: st.metric(label="Phân khúc chủ đạo", value="N/A")
                 
-                # --- VẼ BIỂU ĐỒ VỚI PLOTLY ---
                 if len(properties) > 0:
                     st.markdown("<br>", unsafe_allow_html=True)
                     col_chart1, col_chart2 = st.columns(2)
-                    
                     with col_chart1:
                         district_counts = properties['district'].value_counts().reset_index()
                         district_counts.columns = ['Quận/Huyện', 'Số lượng']
-                        fig_pie = px.pie(district_counts, values='Số lượng', names='Quận/Huyện', 
-                                         title='Tỷ trọng Nguồn hàng theo Khu vực',
-                                         hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
+                        fig_pie = px.pie(district_counts, values='Số lượng', names='Quận/Huyện', title='Tỷ trọng theo Khu vực', hole=0.4)
                         st.plotly_chart(fig_pie, use_container_width=True)
-                        
                     with col_chart2:
                         type_counts = properties['property_type'].value_counts().reset_index()
                         type_counts.columns = ['Loại BĐS', 'Số lượng']
-                        fig_bar = px.bar(type_counts, x='Loại BĐS', y='Số lượng', 
-                                         title='Thống kê theo Phân khúc (Loại nhà)',
-                                         text_auto=True, color='Loại BĐS',
-                                         color_discrete_sequence=px.colors.qualitative.Set2)
+                        fig_bar = px.bar(type_counts, x='Loại BĐS', y='Số lượng', title='Thống kê theo Phân khúc', text_auto=True)
                         st.plotly_chart(fig_bar, use_container_width=True)
 
                 st.divider() 
 
                 # ==========================================
-                # AI BÓC TÁCH TIN NHẮN TỰ ĐỘNG
+                # AI KHỚP LỆNH TỰ ĐỘNG
                 # ==========================================
                 st.subheader("🤖 AI Khớp Lệnh Thần Tốc")
-                raw_chat = st.text_area("Dán nguyên văn đoạn chat nhu cầu của khách vào đây:", 
-                                        placeholder="VD: Em ơi anh Nam đây, anh tìm căn nào quanh Đống Đa tầm 4 củ tỏi đổ lại, rộng xíu cỡ 60m2 nhé, 2 ngủ là ok")
+                raw_chat = st.text_area("Dán nguyên văn đoạn chat nhu cầu của khách vào đây:", placeholder="VD: Tìm căn quanh Đống Đa tầm 4 củ tỏi, 60m2, 2 ngủ...")
                 
                 col_btn_ai, col_btn_empty = st.columns([1, 3])
                 with col_btn_ai:
                     btn_ai_submit = st.button("✨ Phân Tích & Khớp Lệnh", type="primary")
 
-                st.markdown("<br>", unsafe_allow_html=True)
-                
                 with st.expander("Hoặc: Nhập thông tin thủ công (Dự phòng)"):
                     with st.form("manual_form"):
                         col1, col2, col3 = st.columns([2, 1, 1])
@@ -190,16 +191,13 @@ else:
                             m_bedrooms = st.number_input("Số phòng tối thiểu:", min_value=1, value=2, step=1)
                         btn_manual_submit = st.form_submit_button("Khớp Lệnh Thủ Công")
 
-                # ==========================================
-                # LOGIC XỬ LÝ KHỚP LỆNH
-                # ==========================================
                 if btn_ai_submit or btn_manual_submit:
                     if not api_key or not db_url:
-                        st.warning("⚠️ Vui lòng nhập đủ Gemini API Key và Supabase URI ở menu trái!")
+                        st.warning("⚠️ Vui lòng nhập đủ Gemini API Key và Supabase URI!")
                     elif len(properties) == 0:
                         st.error("Rổ hàng trống.")
                     else:
-                        with st.spinner("Đang kích hoạt AI để phân tích và matching..."):
+                        with st.spinner("Đang kích hoạt AI & Matching..."):
                             if btn_ai_submit:
                                 if not raw_chat:
                                     st.error("Vui lòng dán tin nhắn của khách vào ô trống!")
@@ -207,14 +205,8 @@ else:
                                 
                                 client = genai.Client(api_key=api_key)
                                 prompt_json = f"""
-                                Bạn là trợ lý trích xuất dữ liệu. Đọc tin nhắn và trích xuất thành 1 ĐỊNH DẠNG JSON duy nhất:
-                                {{
-                                  "name": "Tên khách hàng",
-                                  "district": "Quận/Khu vực. Ghi 'Bất kỳ' nếu không rõ",
-                                  "budget": Ngân sách tối đa ra số nguyên VNĐ (VD: 4 tỷ -> 4000000000. Mặc định 3000000000),
-                                  "area": Diện tích bằng số (Mặc định 30.0),
-                                  "bedrooms": Số phòng ngủ (Mặc định 1)
-                                }}
+                                Trích xuất JSON:
+                                {{ "name": "Tên khách", "district": "Quận/Khu vực. Mặc định 'Bất kỳ'", "budget": Ngân sách tối đa (số nguyên VNĐ. Mặc định 3000000000), "area": Diện tích (Mặc định 30.0), "bedrooms": Số phòng (Mặc định 1) }}
                                 TIN NHẮN: "{raw_chat}"
                                 """
                                 try:
@@ -227,17 +219,12 @@ else:
                                     cust_budget = int(extracted_data.get("budget", 3000000000))
                                     cust_area = float(extracted_data.get("area", 30.0))
                                     cust_bedrooms = int(extracted_data.get("bedrooms", 1))
-                                    
-                                    st.success(f"**🤖 AI bóc tách dữ liệu:** Tên: **{cust_name}** | Khu vực: **{cust_district}** | Ngân sách: **{cust_budget:,.0f}đ** | **{cust_area}**m2 | **{cust_bedrooms}**PN")
+                                    st.success(f"**🤖 AI bóc tách:** Tên: **{cust_name}** | Khu vực: **{cust_district}** | Ngân sách: **{cust_budget:,.0f}đ** | **{cust_area}**m2 | **{cust_bedrooms}**PN")
                                 except Exception as e:
-                                    st.error("AI không thể phân tích tin nhắn này. Hãy thử nhập lại cho rõ nghĩa hơn hoặc dùng Form nhập tay.")
+                                    st.error("AI không hiểu tin nhắn. Vui lòng thử nhập thủ công.")
                                     st.stop()
                             else:
-                                cust_name = m_name
-                                cust_district = m_district
-                                cust_budget = m_budget
-                                cust_area = m_area
-                                cust_bedrooms = m_bedrooms
+                                cust_name = m_name; cust_district = m_district; cust_budget = m_budget; cust_area = m_area; cust_bedrooms = m_bedrooms
 
                             # --- MATCHING ---
                             customer_req = pd.DataFrame({'budget': [cust_budget], 'area': [cust_area], 'bedrooms': [cust_bedrooms], 'district': [cust_district]})
@@ -249,10 +236,8 @@ else:
                             def calculate_match_score(house, customer):
                                 score = 100 
                                 if customer['district'][0] != "Bất kỳ":
-                                    if str(house['district']).lower() in str(customer['district'][0]).lower() or str(customer['district'][0]).lower() in str(house['district']).lower(): 
-                                        score += 50 
-                                    else: 
-                                        score -= 30 
+                                    if str(house['district']).lower() in str(customer['district'][0]).lower() or str(customer['district'][0]).lower() in str(house['district']).lower(): score += 50 
+                                    else: score -= 30 
                                         
                                 house_price_norm = scaler_price.transform([[house['price']]])[0][0]
                                 cust_budget_norm = scaler_price.transform([[customer['budget'][0]]])[0][0]
@@ -295,9 +280,7 @@ else:
                             # --- KỊCH BẢN CHỐT ---
                             client = genai.Client(api_key=api_key)
                             prompt = f"""
-                            Viết tin nhắn Zalo gửi {cust_name}. Người gửi là Đạt, môi giới bất động sản.
-                            Thông tin: Khách tìm nhà {cust_budget:,.0f} VNĐ. Đang có căn {best_match['project_name']} (Khu vực: {best_match['district']}) phù hợp.
-                            YÊU CẦU: Tối đa 3 câu. KHÔNG nhắc con số giá tiền. Phải có từ khóa kích thích khan hiếm/cơ hội. Rủ đi xem ngay.
+                            Viết tin nhắn Zalo gửi {cust_name}. Người gửi Đạt, môi giới BĐS. Khách tìm nhà {cust_budget:,.0f} VNĐ. Đang có căn {best_match['project_name']} phù hợp. Tối đa 3 câu. KHÔNG nhắc giá tiền. Có từ khóa khan hiếm. Rủ đi xem ngay.
                             """
                             response_zalo = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
 
@@ -309,11 +292,15 @@ else:
                             with col_img:
                                 st.write("**📸 Hình ảnh thực tế:**")
                                 if pd.notna(best_match['image_url']) and str(best_match['image_url']).strip() != "":
-                                    img_val = str(best_match['image_url']).strip()
+                                    # GỌI HÀM LÀM SẠCH LINK ẢNH DRIVE Ở ĐÂY
+                                    img_val = process_image_url(best_match['image_url'])
                                     if img_val.startswith("http"):
-                                        st.image(img_val, use_container_width=True)
+                                        try:
+                                            st.image(img_val, use_container_width=True)
+                                        except:
+                                            st.warning("⚠️ Không thể tải ảnh. Có thể do link không được cấp quyền Public.")
                                     else:
-                                        st.warning("⚠️ Vui lòng up ảnh lên Web (Drive/Imgur) thay vì thư mục máy tính để hiển thị.")
+                                        st.warning("⚠️ AppSheet đang lưu ảnh dưới dạng thư mục. Vui lòng up ảnh lên Drive để hiển thị.")
                                 else:
                                     st.info("Chưa có hình ảnh.")
                                     
@@ -329,42 +316,65 @@ else:
                                 st.text_area("", response_zalo.text, height=150, label_visibility="collapsed")
                             
             # ========================================================
-            # TAB 2: QUẢN LÝ LỊCH SỬ CRM & XÓA DỮ LIỆU
+            # TAB 2: QUẢN LÝ LỊCH SỬ CRM & XUẤT BÁO CÁO (Hỗ trợ số 3)
             # ========================================================
             with tab2:
-                st.subheader("🕵️ Tra cứu lịch sử tư vấn / xem nhà")
-                search_name = st.text_input("Nhập tên khách hàng cần tra cứu (VD: Anh Nguyễn Văn A):", key="search_crm")
+                col_tab2_1, col_tab2_2 = st.columns([2, 1])
                 
-                if st.button("Tra cứu Dữ liệu"):
-                    if not db_url: st.warning("Vui lòng nhập Supabase URI ở menu bên trái!")
-                    elif not search_name: st.warning("Vui lòng nhập tên khách hàng.")
-                    else:
-                        with st.spinner("Đang truy xuất Database..."):
-                            try:
-                                engine_url = db_url.replace("postgresql://", "postgresql+psycopg2://")
-                                engine = create_engine(engine_url)
-                                query = f"SELECT thoi_gian, can_ho_de_xuat, ngan_sach, do_phu_hop FROM crm_khach_hang WHERE ten_khach_hang ILIKE '%%{search_name}%%' ORDER BY thoi_gian DESC"
-                                history_df = pd.read_sql(query, engine)
+                with col_tab2_1:
+                    st.subheader("🕵️ Tra cứu lịch sử tư vấn")
+                    search_name = st.text_input("Nhập tên khách hàng cần tra cứu:", key="search_crm")
+                    
+                    if st.button("Tra cứu Dữ liệu"):
+                        if not db_url: st.warning("Vui lòng nhập Supabase URI!")
+                        elif not search_name: st.warning("Vui lòng nhập tên khách hàng.")
+                        else:
+                            with st.spinner("Đang truy xuất Database..."):
+                                try:
+                                    engine_url = db_url.replace("postgresql://", "postgresql+psycopg2://")
+                                    engine = create_engine(engine_url)
+                                    query = f"SELECT thoi_gian, can_ho_de_xuat, ngan_sach, do_phu_hop FROM crm_khach_hang WHERE ten_khach_hang ILIKE '%%{search_name}%%' ORDER BY thoi_gian DESC"
+                                    history_df = pd.read_sql(query, engine)
 
-                                if not history_df.empty:
-                                    today_str = datetime.datetime.now().strftime("%Y-%m-%d")
-                                    history_df['Ngày'] = pd.to_datetime(history_df['thoi_gian']).dt.strftime('%Y-%m-%d')
-                                    today_df = history_df[history_df['Ngày'] == today_str]
+                                    if not history_df.empty:
+                                        st.success(f"Đã tìm thấy **{len(history_df)}** lần tư vấn cho khách hàng này.")
+                                        st.dataframe(history_df, use_container_width=True)
+                                    else:
+                                        st.warning("Chưa tìm thấy dữ liệu.")
+                                except Exception as e:
+                                    st.error("Lỗi truy xuất dữ liệu từ Supabase.")
+
+                with col_tab2_2:
+                    st.subheader("📊 Báo cáo Toàn bộ CRM")
+                    st.markdown("Chế độ Trưởng Phòng: Tải xuống toàn bộ dữ liệu chăm sóc khách hàng để làm báo cáo.")
+                    
+                    if st.button("Lấy Báo Cáo Tổng Hợp"):
+                        if not db_url: st.warning("Vui lòng nhập Supabase URI!")
+                        else:
+                            with st.spinner("Đang kết xuất dữ liệu..."):
+                                try:
+                                    engine_url = db_url.replace("postgresql://", "postgresql+psycopg2://")
+                                    engine = create_engine(engine_url)
+                                    query_all = "SELECT * FROM crm_khach_hang ORDER BY thoi_gian DESC"
+                                    all_crm_df = pd.read_sql(query_all, engine)
                                     
-                                    st.success(f"Đã tìm thấy **{len(history_df)}** lần tư vấn cho khách hàng này.")
-                                    st.markdown(f"### 📍 Các căn nhà đã xem HÔM NAY ({today_str}):")
-                                    if not today_df.empty: st.dataframe(today_df[['thoi_gian', 'can_ho_de_xuat', 'ngan_sach', 'do_phu_hop']], use_container_width=True)
-                                    else: st.info("Hôm nay khách chưa có lịch sử khớp lệnh mới.")
+                                    if not all_crm_df.empty:
+                                        st.metric("Tổng số lượt khách đã tiếp", f"{len(all_crm_df)} lượt")
                                         
-                                    st.markdown("### 🗓️ Lịch sử các ngày trước:")
-                                    past_df = history_df[history_df['Ngày'] != today_str]
-                                    if not past_df.empty: st.dataframe(past_df[['thoi_gian', 'can_ho_de_xuat', 'ngan_sach', 'do_phu_hop']], use_container_width=True)
-                                    else: st.write("Không có dữ liệu cũ.")
-                                else:
-                                    st.warning("Chưa tìm thấy dữ liệu hoặc khách chưa từng được tư vấn.")
-                            except Exception as e:
-                                st.error("Lỗi truy xuất dữ liệu từ Supabase.")
-                
+                                        # Nút tải file Excel (CSV)
+                                        csv = all_crm_df.to_csv(index=False).encode('utf-8-sig')
+                                        st.download_button(
+                                            label="📥 Tải xuống Báo Cáo (.csv)",
+                                            data=csv,
+                                            file_name=f"Bao_Cao_CRM_LFS_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
+                                            mime="text/csv",
+                                            type="primary"
+                                        )
+                                    else:
+                                        st.info("Kho dữ liệu CRM hiện đang trống.")
+                                except Exception as e:
+                                    st.error("Lỗi kết xuất dữ liệu.")
+
                 st.divider()
                 st.markdown("### 🗑️ Xóa Hồ Sơ Khách Hàng")
                 del_name = st.text_input("Nhập CHÍNH XÁC tên khách hàng cần xóa:")
@@ -380,7 +390,7 @@ else:
                                     sql = text("DELETE FROM crm_khach_hang WHERE ten_khach_hang = :name")
                                     result = conn.execute(sql, {"name": del_name})
                                     deleted_rows = result.rowcount
-                                if deleted_rows > 0: st.success(f"✅ Đã xóa thành công {deleted_rows} dòng dữ liệu của khách '{del_name}'!")
+                                if deleted_rows > 0: st.success(f"✅ Đã xóa thành {deleted_rows} dòng của khách '{del_name}'!")
                                 else: st.info("Không tìm thấy dữ liệu nào khớp với tên này.")
                             except Exception as e:
                                 st.error("Lỗi khi xóa dữ liệu.")
@@ -390,30 +400,19 @@ else:
             # ========================================================
             with tab3:
                 st.subheader("💡 AI Xử Lý Từ Chối & Gợi Ý Trả Lời Khách Hàng")
-                st.markdown("Khách chê giá cao? Khách đòi hỏi giấy tờ rườm rà? Khách 'seen' không rep? Hãy dán tin nhắn vào đây để AI viết câu trả lời giúp bạn!")
-                
                 cust_msg = st.text_area("1. Khách hàng vừa nhắn gì cho bạn?", placeholder="VD: Em ơi giá 4 tỷ này hơi cao, bớt cho anh 500 triệu nhé được anh qua cọc luôn.")
                 agent_intent = st.text_input("2. Ý định trả lời của bạn (Tùy chọn):", placeholder="VD: Giải thích căn này lô góc rất hiếm, chủ chỉ bớt lộc lá 50 triệu thôi.")
                 
                 if st.button("✨ Viết Câu Trả Lời Giúp Tôi", type="primary"):
-                    if not api_key:
-                        st.warning("Vui lòng nhập Gemini API Key ở menu bên trái trước!")
-                    elif not cust_msg:
-                        st.warning("Bạn chưa dán tin nhắn của khách kìa!")
+                    if not api_key: st.warning("Vui lòng nhập Gemini API Key ở menu bên trái trước!")
+                    elif not cust_msg: st.warning("Bạn chưa dán tin nhắn của khách kìa!")
                     else:
                         with st.spinner("AI đang soạn văn mẫu chốt sale đỉnh cao..."):
                             client = genai.Client(api_key=api_key)
                             prompt_reply = f"""
-                            Bạn là Đạt, một siêu sao môi giới bất động sản tại công ty Faraland (Việt Nam), chuyên chốt sale qua Zalo.
-                            Khách hàng vừa nhắn tin: "{cust_msg}"
-                            Định hướng trả lời của tôi (nếu có): "{agent_intent}"
-
-                            Nhiệm vụ: Viết một tin nhắn Zalo phản hồi lại khách hàng để tôi copy gửi luôn.
-                            Yêu cầu:
-                            - Cực kỳ khéo léo, thấu hiểu tâm lý khách hàng (xử lý từ chối mượt mà).
-                            - Văn phong tự nhiên, lễ phép nhưng chuyên nghiệp, có dùng emoji Zalo vừa phải.
-                            - Ngắn gọn, súc tích, đi thẳng vào vấn đề.
-                            - Kết thúc bằng một lời đề nghị hành động (Call to action) để dẫn dắt khách đi xem nhà hoặc chốt cọc.
+                            Bạn là Đạt, môi giới BĐS tại công ty Faraland (Việt Nam).
+                            Khách nhắn: "{cust_msg}". Định hướng của tôi: "{agent_intent}"
+                            Nhiệm vụ: Viết tin nhắn Zalo phản hồi, khéo léo xử lý từ chối, súc tích, kết thúc bằng Call-to-action (rủ đi xem/chốt cọc).
                             """
                             try:
                                 reply_response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_reply)
@@ -421,7 +420,6 @@ else:
                                 st.text_area("Sao chép đoạn dưới đây và gửi Zalo ngay:", reply_response.text, height=250)
                             except Exception as e:
                                 st.error("Lỗi kết nối AI. Vui lòng thử lại.")
-                                st.write(e)
 
         except Exception as e:
             st.error("❌ Lỗi dữ liệu Kho Hàng.")
