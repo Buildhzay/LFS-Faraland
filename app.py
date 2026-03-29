@@ -258,16 +258,102 @@ else:
                     except: st.warning("Chưa có dữ liệu CRM hoặc lỗi kết nối Supabase.")
                 else: st.warning("Nhập Supabase URI để xem CRM.")
 
+            # ==========================================
+            # TAB 3: AI XỬ LÝ TỪ CHỐI & TẠO TIN ĐĂNG HÀNG LOẠT
+            # ==========================================
             with tab3:
-                st.subheader("💡 AI Xử Lý Từ Chối")
-                cust_msg = st.text_area("Khách hàng nhắn gì?")
-                agent_intent = st.text_input("Ý định trả lời:")
-                if st.button("✨ Viết Câu Trả Lời"):
-                    if api_key and cust_msg:
-                        client = genai.Client(api_key=api_key)
-                        res = client.models.generate_content(model='gemini-2.5-flash', contents=f"Bạn là Đạt (môi giới). Khách nói: '{cust_msg}'. Ý định của bạn: '{agent_intent}'. Viết phản hồi Zalo ngắn gọn, khéo léo chốt sale.")
-                        st.success("Văn mẫu Zalo:")
-                        st.text_area("", res.text, height=200, label_visibility="collapsed")
-                    else: st.warning("Vui lòng nhập API Key và tin nhắn khách!")
+                st.header("💡 AI Trợ Lý Nội Dung & Giao Tiếp")
+                
+                # --- TÍNH NĂNG 1: TẠO TIN ĐĂNG TỰ ĐỘNG ---
+                st.subheader("📝 1. Tự Động Viết Tin Đăng Đa Nền Tảng (Bảo Mật Vị Trí)")
+                st.markdown("Chọn một căn nhà trong giỏ hàng để AI tự động 'xào' bài viết Marketing theo văn phong chuyên gia, tuyệt đối ẩn vị trí chính xác.")
+                
+                if len(properties) > 0:
+                    # Lấy danh sách tên nhà để chọn
+                    house_options = properties['project_name'].tolist()
+                    selected_house_name = st.selectbox("🔍 Chọn Bất động sản cần viết bài:", house_options)
+                    
+                    if st.button("✨ Viết Bài Đăng Bán Nhà", type="primary"):
+                        if not api_key:
+                            st.warning("⚠️ Vui lòng nhập Gemini API Key ở menu bên trái!")
+                        else:
+                            with st.spinner("AI đang 'múa phím' soạn content đỉnh cao..."):
+                                client = genai.Client(api_key=api_key)
+                                
+                                # Rút trích thông tin căn nhà đã chọn
+                                selected_house = properties[properties['project_name'] == selected_house_name].iloc[0]
+                                h_price = selected_house['price'] / 1_000_000_000
+                                h_area = selected_house['area']
+                                h_dist = selected_house['district']
+                                h_floors = selected_house.get('floors', 'N/A')
+                                h_type = selected_house.get('property_type', 'Bất động sản')
+                                h_front = selected_house.get('MatTien', 'Rộng rãi')
 
-        except Exception as e: st.error(f"❌ Lỗi đọc dữ liệu Kho Hàng: {e}")
+                                # Tích hợp Prompt siêu cấp của Giám đốc Sản phẩm
+                                prompt_marketing = f"""
+                                Bạn là Đạt, một chuyên gia môi giới bất động sản lão luyện tại Việt Nam.
+                                Hãy viết bài đăng bán BĐS dựa trên dữ liệu sau:
+                                - Loại hình: {h_type}
+                                - Khu vực: Quận {h_dist} (TUYỆT ĐỐI KHÔNG ghi địa chỉ hoặc ngõ cụ thể).
+                                - Diện tích: {h_area} m2
+                                - Mặt tiền: {h_front}
+                                - Số tầng: {h_floors}
+                                - Giá bán: {h_price} Tỷ VNĐ
+
+                                YÊU CẦU CỐT LÕI:
+                                1. BẢO MẬT: Chỉ mô tả vị trí theo dạng "khu vực trung tâm", "gần đường lớn", "gần trường/chợ". Nếu input có địa chỉ cụ thể, phải làm mờ ngay lập tức.
+                                2. VĂN PHONG: Tự nhiên, 100% giống người thật, có yếu tố "bán hàng mềm". Tự động điều chỉnh ngôn từ cho phù hợp với phân khúc giá {h_price} tỷ (Cao cấp dùng từ sang trọng, bình dân dùng từ thực tế).
+                                3. CHUYỂN ĐỔI: Gợi sự tò mò, kích thích khách inbox/gọi điện. Chèn các câu dẫn như "Căn này thực sự phù hợp cho...", "Điểm mình thích nhất là...".
+
+                                CẤU TRÚC BẮT BUỘC:
+                                - TIÊU ĐỀ: [TỪ KHÓA HOT] + [KHU VỰC] + [THÔNG SỐ] + [ĐIỂM MẠNH] + [GIÁ] (Viết hoa, thu hút)
+                                - MỞ BÀI (HOOK): 1-2 câu gây chú ý, đánh trúng insight.
+                                - THÔNG TIN CHÍNH: Gọn gàng, dễ đọc.
+                                - MÔ TẢ CHI TIẾT: Nêu bật ưu điểm, không gian sống, tiềm năng đầu tư/dòng tiền.
+                                - VỊ TRÍ (ẨN): Nhấn mạnh tiện ích, kết nối giao thông.
+                                - PHÙ HỢP VỚI AI: Gia đình, Đầu tư, hay Cho thuê.
+                                - CALL TO ACTION: Kêu gọi liên hệ, tạo khan hiếm ("Sản phẩm hiếm", "Giá tốt nhất phân khúc").
+
+                                ĐẦU RA YÊU CẦU 2 PHIÊN BẢN:
+                                **[PHIÊN BẢN 1: DÀNH CHO FACEBOOK (NGẮN GỌN, NHIỀU ICON)]**
+                                (Viết nội dung vào đây...)
+
+                                ---
+                                **[PHIÊN BẢN 2: DÀNH CHO WEBSITE / BẤT ĐỘNG SẢN .COM (CHI TIẾT, CHUYÊN SÂU)]**
+                                (Viết nội dung vào đây...)
+                                """
+                                
+                                try:
+                                    marketing_res = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_marketing)
+                                    st.success("Ting ting! Content đã "ra lò":")
+                                    # Hiển thị trực tiếp dạng Markdown cho đẹp
+                                    st.markdown(marketing_res.text)
+                                except Exception as e:
+                                    st.error(f"Lỗi kết nối AI: {e}")
+                else:
+                    st.info("Kho hàng đang trống. Hệ thống cần dữ liệu để viết bài.")
+
+                st.divider()
+
+                # --- TÍNH NĂNG 2: XỬ LÝ TỪ CHỐI (Giữ nguyên) ---
+                st.subheader("💬 2. AI Gợi Ý Phản Hồi Khách Hàng")
+                cust_msg = st.text_area("1. Khách hàng vừa nhắn gì cho bạn?", placeholder="VD: Em ơi giá 4 tỷ này hơi cao, bớt cho anh 500 triệu nhé...")
+                agent_intent = st.text_input("2. Ý định trả lời của bạn (Tùy chọn):", placeholder="VD: Giải thích căn này lô góc rất hiếm, chủ chỉ bớt lộc lá 50 triệu thôi.")
+                
+                if st.button("✨ Viết Câu Trả Lời Giúp Tôi"):
+                    if not api_key: st.warning("Vui lòng nhập Gemini API Key!")
+                    elif not cust_msg: st.warning("Bạn chưa dán tin nhắn của khách kìa!")
+                    else:
+                        with st.spinner("AI đang soạn văn mẫu chốt sale..."):
+                            client = genai.Client(api_key=api_key)
+                            prompt_reply = f"""
+                            Bạn là Đạt, môi giới BĐS tại công ty Faraland (Việt Nam).
+                            Khách nhắn: "{cust_msg}". Định hướng của tôi: "{agent_intent}"
+                            Nhiệm vụ: Viết tin nhắn Zalo phản hồi, khéo léo xử lý từ chối, súc tích, kết thúc bằng Call-to-action (rủ đi xem/chốt cọc).
+                            """
+                            try:
+                                reply_response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_reply)
+                                st.success("Văn mẫu phản hồi Zalo:")
+                                st.text_area("", reply_response.text, height=200, label_visibility="collapsed")
+                            except Exception as e:
+                                st.error("Lỗi kết nối AI. Vui lòng thử lại.")
