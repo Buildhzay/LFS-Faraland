@@ -325,7 +325,7 @@ else:
                                 
                                 try:
                                     marketing_res = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_marketing)
-                                    st.success("Ting ting! Content đã "ra lò":")
+                                    st.success('Ting ting! Content đã "ra lò":')
                                     # Hiển thị trực tiếp dạng Markdown cho đẹp
                                     st.markdown(marketing_res.text)
                                 except Exception as e:
