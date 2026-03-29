@@ -71,30 +71,26 @@ else:
         if pd.isna(x): return np.nan
         try:
             val = float(str(x).replace(',', '').replace(' ', ''))
-            # Nếu nhập 10, hệ thống tự hiểu là 10 tỷ
             if 0 < val < 1000: return val * 1_000_000_000
             return val
         except:
             return np.nan
 
     # --- KẾT NỐI DATABASE MỚI ---
-    @st.cache_data(ttl=30) # Cập nhật mỗi 30s
+    @st.cache_data(ttl=30)
     def load_clean_data(url):
         conn = st.connection("gsheets", type=GSheetsConnection)
         df = conn.read(spreadsheet=url)
         df.columns = df.columns.str.strip()
         
-        # Đổi tên cột chuẩn V2.0 sang biến tiếng Anh để thuật toán chạy
         rename_map = {
             'DiaChi': 'project_name', 'GiaBan': 'price', 'DienTich': 'area',
             'SoTang': 'floors', 'PhuongQuan': 'district', 'LinkAnh': 'image_url',
             'LoaiNha': 'property_type', 'ViTriMap': 'location'
         }
-        # Chỉ giữ lại các cột có trong database
         rename_map = {k: v for k, v in rename_map.items() if k in df.columns}
         df = df.rename(columns=rename_map)
         
-        # Xử lý dọn dẹp data
         if 'price' in df.columns: df['price'] = df['price'].apply(smart_clean_number)
         if 'area' in df.columns: df['area'] = df['area'].apply(smart_clean_number)
         if 'floors' in df.columns: df['floors'] = pd.to_numeric(df['floors'], errors='coerce').fillna(1)
@@ -108,13 +104,12 @@ else:
             properties = load_clean_data(sheet_url)
             st.success(f"✅ Đã kết nối Kho Hàng V2.0. Đang có {len(properties)} sản phẩm sẵn sàng giao dịch.")
             
-            tab1, tab2, tab3 = st.tabs(["🚀 AI Khớp Lệnh & Dashboard", "📊 Quản Lý CRM", "💡 AI Giao Tiếp"])
+            tab1, tab2, tab3 = st.tabs(["🚀 AI Khớp Lệnh & Dashboard", "📊 Quản Lý CRM", "💡 AI Giao Tiếp & Content"])
             
             # ==========================================
             # TAB 1: PHÒNG ĐIỀU HÀNH & KHỚP LỆNH
             # ==========================================
             with tab1:
-                # --- BIỂU ĐỒ TỔNG QUAN ---
                 st.markdown("### 📊 Tổng quan Nguồn hàng")
                 col_db1, col_db2, col_db3 = st.columns(3)
                 with col_db1: st.metric("Tổng số Bất động sản", f"{len(properties)} căn")
@@ -136,7 +131,6 @@ else:
 
                 st.divider() 
 
-                # --- AI KHỚP LỆNH ---
                 st.subheader("🤖 AI Khớp Lệnh Thần Tốc")
                 raw_chat = st.text_area("Dán tin nhắn nhu cầu khách hàng vào đây:", placeholder="VD: Anh tìm căn Cầu Giấy tầm 5 tỷ, diện tích tầm 40m2, nhà 4 tầng...")
                 col_btn_ai, _ = st.columns([1, 4])
@@ -168,19 +162,16 @@ else:
                                 
                                 st.success(f"**🤖 AI bóc tách:** Khách: **{c_name}** | Khu vực: **{c_dist}** | Tài chính: **{c_budg:,.0f}đ** | **{c_area}**m2 | **{c_floors}** Tầng")
                                 
-                                # THUẬT TOÁN MATCHING V2.0
                                 customer_req = pd.DataFrame({'price': [c_budg], 'area': [c_area]})
                                 scaler_price = MinMaxScaler().fit(np.append(properties['price'].values, c_budg).reshape(-1, 1))
                                 scaler_area = MinMaxScaler().fit(np.append(properties['area'].values, c_area).reshape(-1, 1))
 
                                 def calc_score(house):
                                     score = 100
-                                    # Chấm điểm Khu vực
                                     if c_dist != "Bất kỳ":
                                         if str(house['district']).lower() in str(c_dist).lower() or str(c_dist).lower() in str(house['district']).lower(): score += 50 
                                         else: score -= 30 
                                     
-                                    # Chấm điểm Giá (Giá thấp hơn budget là điểm cộng)
                                     h_price_n = scaler_price.transform([[house['price']]])[0][0]
                                     c_budg_n = scaler_price.transform([[c_budg]])[0][0]
                                     diff_n = h_price_n - c_budg_n
@@ -190,7 +181,6 @@ else:
                                     elif 0 < diff_vnd <= 1_000_000_000: score -= (diff_n * 10)  
                                     else: score += (abs(diff_n) * 15) 
                                         
-                                    # Chấm điểm Diện tích & Số tầng
                                     h_area_n = scaler_area.transform([[house['area']]])[0][0]
                                     c_area_n = scaler_area.transform([[c_area]])[0][0]
                                     score -= (abs(h_area_n - c_area_n) * 20) 
@@ -201,7 +191,6 @@ else:
                                 properties['match_score'] = properties.apply(calc_score, axis=1)
                                 best = properties.sort_values(by='match_score', ascending=False).iloc[0]
 
-                                # LƯU CRM
                                 crm_msg = ""
                                 if db_url:
                                     try:
@@ -217,11 +206,9 @@ else:
                                     except:
                                         crm_msg = "⚠️ Không lưu được CRM (Kiểm tra lại link Supabase)."
 
-                                # AI VĂN MẪU ZALO
                                 prompt_zalo = f"Viết tin nhắn Zalo gửi {c_name}. Người gửi Đạt (Môi giới BĐS). Khách tìm nhà {c_budg:,.0f}đ. Có căn {best['project_name']} phù hợp. Tối đa 3 câu, ngắn gọn, rủ đi xem nhà."
                                 zalo_resp = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_zalo)
 
-                                # KẾT QUẢ
                                 st.success(f"🎉 Khớp lệnh thành công! {crm_msg}")
                                 c1, c2, c3 = st.columns([1.5, 1.5, 2])
                                 with c1:
@@ -245,7 +232,7 @@ else:
                                 st.error(f"Lỗi xử lý AI: {e}")
 
             # ==========================================
-            # TAB 2 & 3: CRM & GỢI Ý GIAO TIẾP (Giữ nguyên logic)
+            # TAB 2: QUẢN LÝ CRM
             # ==========================================
             with tab2:
                 st.subheader("🕵️ Lịch sử Tư vấn & Xuất Báo Cáo")
@@ -259,7 +246,7 @@ else:
                 else: st.warning("Nhập Supabase URI để xem CRM.")
 
             # ==========================================
-            # TAB 3: AI XỬ LÝ TỪ CHỐI & TẠO TIN ĐĂNG HÀNG LOẠT
+            # TAB 3: AI XỬ LÝ TỪ CHỐI & TẠO TIN ĐĂNG
             # ==========================================
             with tab3:
                 st.header("💡 AI Trợ Lý Nội Dung & Giao Tiếp")
@@ -269,7 +256,6 @@ else:
                 st.markdown("Chọn một căn nhà trong giỏ hàng để AI tự động 'xào' bài viết Marketing theo văn phong chuyên gia, tuyệt đối ẩn vị trí chính xác.")
                 
                 if len(properties) > 0:
-                    # Lấy danh sách tên nhà để chọn
                     house_options = properties['project_name'].tolist()
                     selected_house_name = st.selectbox("🔍 Chọn Bất động sản cần viết bài:", house_options)
                     
@@ -280,7 +266,6 @@ else:
                             with st.spinner("AI đang 'múa phím' soạn content đỉnh cao..."):
                                 client = genai.Client(api_key=api_key)
                                 
-                                # Rút trích thông tin căn nhà đã chọn
                                 selected_house = properties[properties['project_name'] == selected_house_name].iloc[0]
                                 h_price = selected_house['price'] / 1_000_000_000
                                 h_area = selected_house['area']
@@ -289,7 +274,6 @@ else:
                                 h_type = selected_house.get('property_type', 'Bất động sản')
                                 h_front = selected_house.get('MatTien', 'Rộng rãi')
 
-                                # Tích hợp Prompt siêu cấp của Giám đốc Sản phẩm
                                 prompt_marketing = f"""
                                 Bạn là Đạt, một chuyên gia môi giới bất động sản lão luyện tại Việt Nam.
                                 Hãy viết bài đăng bán BĐS dựa trên dữ liệu sau:
@@ -326,7 +310,6 @@ else:
                                 try:
                                     marketing_res = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_marketing)
                                     st.success('Ting ting! Content đã "ra lò":')
-                                    # Hiển thị trực tiếp dạng Markdown cho đẹp
                                     st.markdown(marketing_res.text)
                                 except Exception as e:
                                     st.error(f"Lỗi kết nối AI: {e}")
@@ -335,7 +318,7 @@ else:
 
                 st.divider()
 
-                # --- TÍNH NĂNG 2: XỬ LÝ TỪ CHỐI (Giữ nguyên) ---
+                # --- TÍNH NĂNG 2: XỬ LÝ TỪ CHỐI ---
                 st.subheader("💬 2. AI Gợi Ý Phản Hồi Khách Hàng")
                 cust_msg = st.text_area("1. Khách hàng vừa nhắn gì cho bạn?", placeholder="VD: Em ơi giá 4 tỷ này hơi cao, bớt cho anh 500 triệu nhé...")
                 agent_intent = st.text_input("2. Ý định trả lời của bạn (Tùy chọn):", placeholder="VD: Giải thích căn này lô góc rất hiếm, chủ chỉ bớt lộc lá 50 triệu thôi.")
@@ -357,3 +340,5 @@ else:
                                 st.text_area("", reply_response.text, height=200, label_visibility="collapsed")
                             except Exception as e:
                                 st.error("Lỗi kết nối AI. Vui lòng thử lại.")
+
+        except Exception as e: st.error(f"❌ Lỗi đọc dữ liệu Kho Hàng: {e}")
