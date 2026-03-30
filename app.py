@@ -4,6 +4,7 @@ import numpy as np
 import datetime
 import json
 import re
+import os
 import plotly.express as px
 from sklearn.preprocessing import MinMaxScaler
 from google import genai
@@ -19,7 +20,7 @@ if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 
 VALID_USER = "admin"
-VALID_PASS = "123456"
+VALID_PASS = "faraland"
 
 # ==========================================
 # 2. MÀN HÌNH ĐĂNG NHẬP
@@ -282,7 +283,6 @@ else:
                                     masked_price = str(int(h_price)) + ".XX"
 
                                 # 3. CHỌN ĐÚNG FILE VĂN MẪU THEO PHÂN KHÚC
-                                import os
                                 file_mau = "mau_4_8ty.csv" # Mặc định
                                 
                                 if any(word in h_type for word in ["dòng tiền", "ccmn", "căn hộ dịch vụ", "cho thuê"]):
@@ -350,7 +350,7 @@ else:
                                 
                                 try:
                                     marketing_res = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_marketing)
-                                    st.success(f'Ting ting! AI đã học xong và tạo bài SIÊU NGẮN (Giá ẩn: {masked_price} Tỷ) thành công:')
+                                    st.success(f"Ting ting! AI đã học xong và tạo bài SIÊU NGẮN (Giá ẩn: {masked_price} Tỷ) thành công:")
                                     st.markdown(marketing_res.text)
                                 except Exception as e:
                                     st.error(f"Lỗi kết nối AI: {e}")
@@ -381,32 +381,6 @@ else:
                                 st.text_area("", reply_response.text, height=200, label_visibility="collapsed")
                             except Exception as e:
                                 st.error("Lỗi kết nối AI. Vui lòng thử lại.")
-                else:
-                    st.info("Kho hàng đang trống. Hệ thống cần dữ liệu để viết bài.")
 
-                st.divider()
-
-                # --- TÍNH NĂNG 2: XỬ LÝ TỪ CHỐI ---
-                st.subheader("💬 2. AI Gợi Ý Phản Hồi Khách Hàng")
-                cust_msg = st.text_area("1. Khách hàng vừa nhắn gì cho bạn?", placeholder="VD: Em ơi giá 4 tỷ này hơi cao, bớt cho anh 500 triệu nhé...")
-                agent_intent = st.text_input("2. Ý định trả lời của bạn (Tùy chọn):", placeholder="VD: Giải thích căn này lô góc rất hiếm, chủ chỉ bớt lộc lá 50 triệu thôi.")
-                
-                if st.button("✨ Viết Câu Trả Lời Giúp Tôi"):
-                    if not api_key: st.warning("Vui lòng nhập Gemini API Key!")
-                    elif not cust_msg: st.warning("Bạn chưa dán tin nhắn của khách kìa!")
-                    else:
-                        with st.spinner("AI đang soạn văn mẫu chốt sale..."):
-                            client = genai.Client(api_key=api_key)
-                            prompt_reply = f"""
-                            Bạn là Đạt, môi giới BĐS tại công ty Faraland (Việt Nam).
-                            Khách nhắn: "{cust_msg}". Định hướng của tôi: "{agent_intent}"
-                            Nhiệm vụ: Viết tin nhắn Zalo phản hồi, khéo léo xử lý từ chối, súc tích, kết thúc bằng Call-to-action (rủ đi xem/chốt cọc).
-                            """
-                            try:
-                                reply_response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_reply)
-                                st.success("Văn mẫu phản hồi Zalo:")
-                                st.text_area("", reply_response.text, height=200, label_visibility="collapsed")
-                            except Exception as e:
-                                st.error("Lỗi kết nối AI. Vui lòng thử lại.")
-
-        except Exception as e: st.error(f"❌ Lỗi đọc dữ liệu Kho Hàng: {e}")
+        except Exception as e:
+            st.error(f"❌ Lỗi đọc dữ liệu Kho Hàng: {e}")
