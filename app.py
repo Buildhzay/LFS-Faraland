@@ -19,7 +19,7 @@ if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 
 VALID_USER = "admin"
-VALID_PASS = "faraland"
+VALID_PASS = "123456"
 
 # ==========================================
 # 2. MÀN HÌNH ĐĂNG NHẬP
