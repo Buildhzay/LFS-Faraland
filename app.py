@@ -253,7 +253,7 @@ else:
                 
                 # --- TÍNH NĂNG 1: TẠO TIN ĐĂNG TỰ ĐỘNG (CÓ HỌC VĂN MẪU) ---
                 st.subheader("📝 1. Tự Động Viết Tin Đăng (Few-Shot AI)")
-                st.markdown("Hệ thống tự động phân tích giá/loại nhà, trích xuất văn mẫu thực chiến của Faraland để AI 'nhập hồn' và viết bài.")
+                st.markdown("Hệ thống tự động phân tích giá/loại nhà, trích xuất văn mẫu thực chiến để AI 'nhập hồn' và viết bài siêu tốc.")
                 
                 if len(properties) > 0:
                     house_options = properties['project_name'].tolist()
@@ -275,13 +275,13 @@ else:
                                 h_type = str(selected_house.get('property_type', 'Bất động sản')).lower()
                                 h_front = selected_house.get('MatTien', 'Rộng rãi')
 
-                                # CHE MỜ GIÁ TIỀN THÔNG MINH (Kích thích tò mò)
+                                # 2. CHE MỜ GIÁ TIỀN THÔNG MINH (Kích thích tò mò)
                                 if h_price >= 10:
-                                    masked_price = str(int(h_price))[0] + "X.XX" # VD: 12 tỷ -> 1X.XX 
+                                    masked_price = str(int(h_price))[0] + "X.XX"
                                 else:
-                                    masked_price = str(int(h_price)) + ".XX" # VD: 5 tỷ -> 5.XX
+                                    masked_price = str(int(h_price)) + ".XX"
 
-                                # 2. CHỌN ĐÚNG FILE VĂN MẪU THEO PHÂN KHÚC
+                                # 3. CHỌN ĐÚNG FILE VĂN MẪU THEO PHÂN KHÚC
                                 import os
                                 file_mau = "mau_4_8ty.csv" # Mặc định
                                 
@@ -292,7 +292,7 @@ else:
                                 elif h_price >= 10:
                                     file_mau = "mau_10ty.csv"
                                 
-                                # 3. ĐỌC FILE CSV VÀ CHỌN NGẪU NHIÊN 3 BÀI
+                                # 4. ĐỌC FILE CSV VÀ CHỌN NGẪU NHIÊN 3 BÀI
                                 van_mau_text = ""
                                 if os.path.exists(file_mau):
                                     try:
@@ -312,7 +312,7 @@ else:
                                 if not van_mau_text.strip():
                                     van_mau_text = "Không có ví dụ mẫu cụ thể. Hãy tự viết bằng văn phong đỉnh cao, chuyên nghiệp nhất."
 
-                               # 4. TÍCH HỢP VÀO PROMPT CHO GEMINI (ÉP KHUÔN XUỐNG DÒNG & THỤT LỀ)
+                                # 5. TÍCH HỢP VÀO PROMPT CHO GEMINI (ÉP KHUÔN XUỐNG DÒNG & THỤT LỀ)
                                 prompt_marketing = f"""
                                 Bạn là Đạt, một siêu cò bất động sản lão luyện tại Việt Nam. Số điện thoại của bạn là: 0886426918.
                                 Hãy viết bài đăng bán BĐS dựa trên dữ liệu thật sau:
@@ -348,15 +348,39 @@ else:
                                 ĐẦU RA: Chỉ viết 1 phiên bản duy nhất, chuẩn form đăng Facebook/Zalo ngay lập tức.
                                 """
                                 
-                                ĐẦU RA: Chỉ viết 1 phiên bản duy nhất, chuẩn form đăng Facebook/Zalo ngay lập tức.
-                                """
-                                
                                 try:
                                     marketing_res = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_marketing)
                                     st.success(f'Ting ting! AI đã học xong và tạo bài SIÊU NGẮN (Giá ẩn: {masked_price} Tỷ) thành công:')
                                     st.markdown(marketing_res.text)
                                 except Exception as e:
                                     st.error(f"Lỗi kết nối AI: {e}")
+                else:
+                    st.info("Kho hàng đang trống. Hệ thống cần dữ liệu để viết bài.")
+
+                st.divider()
+
+                # --- TÍNH NĂNG 2: XỬ LÝ TỪ CHỐI ---
+                st.subheader("💬 2. AI Gợi Ý Phản Hồi Khách Hàng")
+                cust_msg = st.text_area("1. Khách hàng vừa nhắn gì cho bạn?", placeholder="VD: Em ơi giá 4 tỷ này hơi cao, bớt cho anh 500 triệu nhé...")
+                agent_intent = st.text_input("2. Ý định trả lời của bạn (Tùy chọn):", placeholder="VD: Giải thích căn này lô góc rất hiếm, chủ chỉ bớt lộc lá 50 triệu thôi.")
+                
+                if st.button("✨ Viết Câu Trả Lời Giúp Tôi"):
+                    if not api_key: st.warning("Vui lòng nhập Gemini API Key!")
+                    elif not cust_msg: st.warning("Bạn chưa dán tin nhắn của khách kìa!")
+                    else:
+                        with st.spinner("AI đang soạn văn mẫu chốt sale..."):
+                            client = genai.Client(api_key=api_key)
+                            prompt_reply = f"""
+                            Bạn là Đạt, môi giới BĐS tại công ty Faraland (Việt Nam).
+                            Khách nhắn: "{cust_msg}". Định hướng của tôi: "{agent_intent}"
+                            Nhiệm vụ: Viết tin nhắn Zalo phản hồi, khéo léo xử lý từ chối, súc tích, kết thúc bằng Call-to-action (rủ đi xem/chốt cọc).
+                            """
+                            try:
+                                reply_response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_reply)
+                                st.success("Văn mẫu phản hồi Zalo:")
+                                st.text_area("", reply_response.text, height=200, label_visibility="collapsed")
+                            except Exception as e:
+                                st.error("Lỗi kết nối AI. Vui lòng thử lại.")
                 else:
                     st.info("Kho hàng đang trống. Hệ thống cần dữ liệu để viết bài.")
 
