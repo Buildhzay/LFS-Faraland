@@ -309,9 +309,9 @@ else:
                                 if not van_mau_text.strip():
                                     van_mau_text = "Không có ví dụ mẫu cụ thể. Hãy tự viết bằng văn phong đỉnh cao, chuyên nghiệp nhất."
 
-                                # 4. TÍCH HỢP VÀO PROMPT CHO GEMINI
+                                # 4. TÍCH HỢP VÀO PROMPT CHO GEMINI (BẢN TỐI ƯU SIÊU NGẮN GỌN)
                                 prompt_marketing = f"""
-                                Bạn là Đạt, một chuyên gia môi giới bất động sản lão luyện tại Việt Nam.
+                                Bạn là Đạt, một siêu cò bất động sản lão luyện tại Việt Nam. Số điện thoại của bạn là: 0886426918.
                                 Hãy viết bài đăng bán BĐS dựa trên dữ liệu thật sau:
                                 - Loại hình: {h_type}
                                 - Khu vực: Quận {h_dist} (TUYỆT ĐỐI KHÔNG ghi địa chỉ hoặc ngõ cụ thể, chỉ ghi quận hoặc khu vực lân cận).
@@ -320,20 +320,26 @@ else:
                                 - Số tầng: {h_floors}
                                 - Giá bán: {h_price} Tỷ VNĐ
 
-                                DƯỚI ĐÂY LÀ CÁC BÀI VĂN MẪU CỦA CÔNG TY (PHÙ HỢP VỚI PHÂN KHÚC NÀY). 
-                                HÃY ĐỌC KỸ VÀ "BẮT CHƯỚC" 100% VĂN PHONG, CÁCH DÙNG TỪ LÓNG (như 'Sale tụt quần', 'Gà đẻ trứng vàng'...), CÁCH XUỐNG DÒNG VÀ CHÈN ICON CỦA CÁC BÀI NÀY:
-                                
+                                DƯỚI ĐÂY LÀ CÁC BÀI VĂN MẪU CỦA CÔNG TY. HÃY ĐỌC ĐỂ HIỂU "VIBE" VÀ CÁC TỪ LÓNG (Sale tụt quần, Gà đẻ trứng vàng...):
                                 {van_mau_text}
 
-                                YÊU CẦU CỐT LÕI MỚI:
-                                1. BẢO MẬT: Phải làm mờ vị trí chính xác của căn nhà hiện tại.
-                                2. SÁNG TẠO: Không copy y nguyên ví dụ, mà dùng thông số thật của căn nhà để viết lại theo "cái hồn" của ví dụ.
-                                3. ĐẦU RA: Viết 2 phiên bản (Bản 1: Đăng Facebook ngắn gọn, giật tít, nhiều icon. Bản 2: Đăng Website chi tiết, phân tích sâu về dòng tiền/ở).
+                                YÊU CẦU CỐT LÕI (TUYỆT ĐỐI TUÂN THỦ):
+                                1. SIÊU NGẮN GỌN & GIẬT TÍT: Khách hàng lười đọc. Viết cực kỳ súc tích, đập thẳng thông số vào mắt. KHÔNG CÓ đoạn văn dài lê thê. Tổng toàn bộ bài viết KHÔNG QUÁ 150 TỪ.
+                                2. TRÌNH BÀY BẮT MẮT: Sử dụng nhiều Emoji (🚨, 📍, 🚀, 🏡, 💰, 🎯). In hoa các từ khóa kích thích thị giác (SỐC, ĐỊA CHẤN, SIÊU PHẨM, GÀ ĐẺ TRỨNG VÀNG).
+                                3. BẢO MẬT: Làm mờ vị trí chính xác.
+                                4. BỐ CỤC CHUẨN:
+                                   - Tiêu đề (Giật gân, In hoa, chèn Icon)
+                                   - Vị trí (1 câu ngắn)
+                                   - Thông số (Gạch đầu dòng ngắn gọn)
+                                   - Tiềm năng (1-2 câu nhấn mạnh dòng tiền/lãi vốn)
+                                   - Kết bài: BẮT BUỘC chốt đúng nguyên văn câu này: "LH: E Đạt - 0886426918 ( chính chủ k tiếp môi giới )"
+                                
+                                ĐẦU RA: Chỉ viết 1 phiên bản duy nhất, chuẩn form đăng Facebook/Zalo ngay lập tức.
                                 """
                                 
                                 try:
                                     marketing_res = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_marketing)
-                                    st.success(f'Ting ting! AI đã học xong từ file [{file_mau}] và tạo bài thành công:')
+                                    st.success(f'Ting ting! AI đã học xong từ file [{file_mau}] và tạo bài SIÊU NGẮN thành công:')
                                     st.markdown(marketing_res.text)
                                 except Exception as e:
                                     st.error(f"Lỗi kết nối AI: {e}")
