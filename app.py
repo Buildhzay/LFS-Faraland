@@ -275,6 +275,12 @@ else:
                                 h_type = str(selected_house.get('property_type', 'Bất động sản')).lower()
                                 h_front = selected_house.get('MatTien', 'Rộng rãi')
 
+                                # CHE MỜ GIÁ TIỀN THÔNG MINH (Kích thích tò mò)
+                                if h_price >= 10:
+                                    masked_price = str(int(h_price))[0] + "X.XX" # VD: 12 tỷ -> 1X.XX 
+                                else:
+                                    masked_price = str(int(h_price)) + ".XX" # VD: 5 tỷ -> 5.XX
+
                                 # 2. CHỌN ĐÚNG FILE VĂN MẪU THEO PHÂN KHÚC
                                 import os
                                 file_mau = "mau_4_8ty.csv" # Mặc định
@@ -291,11 +297,9 @@ else:
                                 if os.path.exists(file_mau):
                                     try:
                                         df_mau = pd.read_csv(file_mau)
-                                        # Xóa các dòng bị trống nội dung (Phòng hờ file >20 tỷ đang trống)
                                         if 'NỘI DUNG' in df_mau.columns:
                                             df_mau = df_mau.dropna(subset=['NỘI DUNG'])
                                             if not df_mau.empty:
-                                                # Chọn ngẫu nhiên tối đa 3 bài mẫu
                                                 num_samples = min(3, len(df_mau))
                                                 sample_df = df_mau.sample(num_samples)
                                                 for idx, row in sample_df.iterrows():
@@ -303,13 +307,12 @@ else:
                                                     noi_dung = row.get('NỘI DUNG', '')
                                                     van_mau_text += f"\n[VÍ DỤ MẪU]:\nTIÊU ĐỀ: {tieu_de}\nNỘI DUNG:\n{noi_dung}\n---\n"
                                     except Exception as e:
-                                        pass # Nếu lỗi đọc file, bỏ qua và để AI tự viết
+                                        pass
                                 
-                                # Nếu file trống hoặc không tìm thấy file, gán câu lệnh mặc định
                                 if not van_mau_text.strip():
                                     van_mau_text = "Không có ví dụ mẫu cụ thể. Hãy tự viết bằng văn phong đỉnh cao, chuyên nghiệp nhất."
 
-                                # 4. TÍCH HỢP VÀO PROMPT CHO GEMINI (BẢN TỐI ƯU SIÊU NGẮN GỌN)
+                                # 4. TÍCH HỢP VÀO PROMPT CHO GEMINI (ÉP DÙNG GIÁ ĐÃ CHE)
                                 prompt_marketing = f"""
                                 Bạn là Đạt, một siêu cò bất động sản lão luyện tại Việt Nam. Số điện thoại của bạn là: 0886426918.
                                 Hãy viết bài đăng bán BĐS dựa trên dữ liệu thật sau:
@@ -318,7 +321,7 @@ else:
                                 - Diện tích: {h_area} m2
                                 - Mặt tiền: {h_front}
                                 - Số tầng: {h_floors}
-                                - Giá bán: {h_price} Tỷ VNĐ
+                                - Giá bán: {masked_price} Tỷ VNĐ (BẮT BUỘC giữ nguyên định dạng ẩn số này, KHÔNG được phép giải thích hay ghi rõ giá tiền).
 
                                 DƯỚI ĐÂY LÀ CÁC BÀI VĂN MẪU CỦA CÔNG TY. HÃY ĐỌC ĐỂ HIỂU "VIBE" VÀ CÁC TỪ LÓNG (Sale tụt quần, Gà đẻ trứng vàng...):
                                 {van_mau_text}
@@ -326,9 +329,9 @@ else:
                                 YÊU CẦU CỐT LÕI (TUYỆT ĐỐI TUÂN THỦ):
                                 1. SIÊU NGẮN GỌN & GIẬT TÍT: Khách hàng lười đọc. Viết cực kỳ súc tích, đập thẳng thông số vào mắt. KHÔNG CÓ đoạn văn dài lê thê. Tổng toàn bộ bài viết KHÔNG QUÁ 150 TỪ.
                                 2. TRÌNH BÀY BẮT MẮT: Sử dụng nhiều Emoji (🚨, 📍, 🚀, 🏡, 💰, 🎯). In hoa các từ khóa kích thích thị giác (SỐC, ĐỊA CHẤN, SIÊU PHẨM, GÀ ĐẺ TRỨNG VÀNG).
-                                3. BẢO MẬT: Làm mờ vị trí chính xác.
+                                3. BẢO MẬT VỊ TRÍ & GIÁ: Làm mờ vị trí chính xác và giữ nguyên giá ẩn {masked_price} Tỷ để chèo kéo khách gọi điện.
                                 4. BỐ CỤC CHUẨN:
-                                   - Tiêu đề (Giật gân, In hoa, chèn Icon)
+                                   - Tiêu đề (Giật gân, In hoa, chèn Icon, có giá {masked_price} tỷ)
                                    - Vị trí (1 câu ngắn)
                                    - Thông số (Gạch đầu dòng ngắn gọn)
                                    - Tiềm năng (1-2 câu nhấn mạnh dòng tiền/lãi vốn)
@@ -339,7 +342,7 @@ else:
                                 
                                 try:
                                     marketing_res = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_marketing)
-                                    st.success(f'Ting ting! AI đã học xong từ file [{file_mau}] và tạo bài SIÊU NGẮN thành công:')
+                                    st.success(f'Ting ting! AI đã học xong và tạo bài SIÊU NGẮN (Giá ẩn: {masked_price} Tỷ) thành công:')
                                     st.markdown(marketing_res.text)
                                 except Exception as e:
                                     st.error(f"Lỗi kết nối AI: {e}")
