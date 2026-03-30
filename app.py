@@ -5,6 +5,7 @@ import datetime
 import json
 import re
 import os
+import PIL.Image
 import plotly.express as px
 from sklearn.preprocessing import MinMaxScaler
 from google import genai
@@ -12,7 +13,7 @@ from streamlit_gsheets import GSheetsConnection
 from sqlalchemy import create_engine, text
 
 # ==========================================
-# 1. CẤU HÌNH GIAO DIỆN WEB (CLEAN CODE V2.0)
+# 1. CẤU HÌNH GIAO DIỆN WEB (MASTER V2.0)
 # ==========================================
 st.set_page_config(page_title="LFS Pro - Trợ lý Bất động sản", page_icon="🏢", layout="wide")
 
@@ -103,9 +104,9 @@ else:
     if sheet_url:
         try:
             properties = load_clean_data(sheet_url)
-            st.success(f"✅ Đã kết nối Kho Hàng V2.0. Đang có {len(properties)} sản phẩm sẵn sàng giao dịch.")
+            st.success(f"✅ Đã kết nối Kho Hàng. Đang có {len(properties)} sản phẩm sẵn sàng giao dịch.")
             
-            tab1, tab2, tab3 = st.tabs(["🚀 AI Khớp Lệnh & Dashboard", "📊 Quản Lý CRM", "💡 AI Giao Tiếp & Content"])
+            tab1, tab2, tab3, tab4 = st.tabs(["🚀 AI Khớp Lệnh", "📊 Quản Lý CRM", "💡 AI Content", "🖼️ AI Lọc Ảnh Mồi"])
             
             # ==========================================
             # TAB 1: PHÒNG ĐIỀU HÀNH & KHỚP LỆNH
@@ -247,12 +248,9 @@ else:
                 else: st.warning("Nhập Supabase URI để xem CRM.")
 
             # ==========================================
-            # TAB 3: AI XỬ LÝ TỪ CHỐI & TẠO TIN ĐĂNG
+            # TAB 3: AI CONTENT (FEW-SHOT & ÉP KHUÔN)
             # ==========================================
             with tab3:
-                st.header("💡 AI Trợ Lý Nội Dung & Giao Tiếp")
-                
-                # --- TÍNH NĂNG 1: TẠO TIN ĐĂNG TỰ ĐỘNG (CÓ HỌC VĂN MẪU) ---
                 st.subheader("📝 1. Tự Động Viết Tin Đăng (Few-Shot AI)")
                 st.markdown("Hệ thống tự động phân tích giá/loại nhà, trích xuất văn mẫu thực chiến để AI 'nhập hồn' và viết bài siêu tốc.")
                 
@@ -276,15 +274,14 @@ else:
                                 h_type = str(selected_house.get('property_type', 'Bất động sản')).lower()
                                 h_front = selected_house.get('MatTien', 'Rộng rãi')
 
-                                # 2. CHE MỜ GIÁ TIỀN THÔNG MINH (Kích thích tò mò)
+                                # 2. CHE MỜ GIÁ TIỀN THÔNG MINH
                                 if h_price >= 10:
-                                    masked_price = str(int(h_price))[0] + "X.XX"
+                                    masked_price = str(int(h_price))[0] + "x.xx"
                                 else:
-                                    masked_price = str(int(h_price)) + ".XX"
+                                    masked_price = str(int(h_price)) + ".xx"
 
                                 # 3. CHỌN ĐÚNG FILE VĂN MẪU THEO PHÂN KHÚC
-                                file_mau = "mau_4_8ty.csv" # Mặc định
-                                
+                                file_mau = "mau_4_8ty.csv"
                                 if any(word in h_type for word in ["dòng tiền", "ccmn", "căn hộ dịch vụ", "cho thuê"]):
                                     file_mau = "mau_dong_tien.csv"
                                 elif h_price >= 20:
@@ -292,7 +289,7 @@ else:
                                 elif h_price >= 10:
                                     file_mau = "mau_10ty.csv"
                                 
-                                # 4. ĐỌC FILE CSV VÀ CHỌN NGẪU NHIÊN 3 BÀI
+                                # 4. ĐỌC FILE CSV VÀ CHỌN NGẪU NHIÊN BÀI MẪU
                                 van_mau_text = ""
                                 if os.path.exists(file_mau):
                                     try:
@@ -312,7 +309,7 @@ else:
                                 if not van_mau_text.strip():
                                     van_mau_text = "Không có ví dụ mẫu cụ thể. Hãy tự viết bằng văn phong đỉnh cao, chuyên nghiệp nhất."
 
-                                # 5. TÍCH HỢP VÀO PROMPT CHO GEMINI (ÉP KHUÔN XUỐNG DÒNG & THỤT LỀ)
+                                # 5. PROMPT CHUẨN ÉP KHUÔN THỤT LỀ
                                 prompt_marketing = f"""
                                 Bạn là Đạt, một siêu cò bất động sản lão luyện tại Việt Nam. Số điện thoại của bạn là: 0886426918.
                                 Hãy viết bài đăng bán BĐS dựa trên dữ liệu thật sau:
@@ -323,7 +320,7 @@ else:
                                 - Số tầng: {h_floors}
                                 - Giá bán: {masked_price} Tỷ VNĐ (BẮT BUỘC giữ nguyên định dạng giá ẩn này).
 
-                                DƯỚI ĐÂY LÀ CÁC BÀI VĂN MẪU ĐỂ BẠN HỌC "VIBE" TỪ LÓNG (Sale tụt quần, Gà đẻ trứng vàng...):
+                                DƯỚI ĐÂY LÀ CÁC BÀI VĂN MẪU ĐỂ BẠN HỌC "VIBE" TỪ LÓNG:
                                 {van_mau_text}
 
                                 YÊU CẦU CỐT LÕI (TUYỆT ĐỐI TUÂN THỦ):
@@ -341,7 +338,7 @@ else:
                                 &nbsp;&nbsp;&nbsp;&nbsp;👉 Mặt tiền: {h_front} - [1 câu ngắn về ưu điểm mặt tiền]
                                 &nbsp;&nbsp;&nbsp;&nbsp;💰 GIÁ BÁN SỐC: CHỈ {masked_price} TỶ (Gà đẻ trứng vàng!)
                                 
-                                🎯 Tiềm năng: [1 câu chốt hạ về dòng tiền/lãi vốn]
+                                🎯 Tiềm năng: Cam kết dòng tiền ổn định, tiềm năng tăng giá cao trong tương lai gần!
                                 
                                 LH: E Đạt - 0886426918 ( chính chủ k tiếp môi giới )
                                 
@@ -359,10 +356,10 @@ else:
 
                 st.divider()
 
-                # --- TÍNH NĂNG 2: XỬ LÝ TỪ CHỐI ---
+                # --- AI XỬ LÝ TỪ CHỐI ---
                 st.subheader("💬 2. AI Gợi Ý Phản Hồi Khách Hàng")
-                cust_msg = st.text_area("1. Khách hàng vừa nhắn gì cho bạn?", placeholder="VD: Em ơi giá 4 tỷ này hơi cao, bớt cho anh 500 triệu nhé...")
-                agent_intent = st.text_input("2. Ý định trả lời của bạn (Tùy chọn):", placeholder="VD: Giải thích căn này lô góc rất hiếm, chủ chỉ bớt lộc lá 50 triệu thôi.")
+                cust_msg = st.text_area("1. Khách hàng vừa nhắn gì cho bạn?", placeholder="VD: Em ơi giá này hơi cao...")
+                agent_intent = st.text_input("2. Ý định trả lời của bạn (Tùy chọn):", placeholder="VD: Giải thích căn lô góc rất hiếm...")
                 
                 if st.button("✨ Viết Câu Trả Lời Giúp Tôi"):
                     if not api_key: st.warning("Vui lòng nhập Gemini API Key!")
@@ -373,7 +370,7 @@ else:
                             prompt_reply = f"""
                             Bạn là Đạt, môi giới BĐS tại công ty Faraland (Việt Nam).
                             Khách nhắn: "{cust_msg}". Định hướng của tôi: "{agent_intent}"
-                            Nhiệm vụ: Viết tin nhắn Zalo phản hồi, khéo léo xử lý từ chối, súc tích, kết thúc bằng Call-to-action (rủ đi xem/chốt cọc).
+                            Nhiệm vụ: Viết tin nhắn Zalo phản hồi, khéo léo xử lý từ chối, súc tích, chốt sale bằng cách hẹn đi xem nhà.
                             """
                             try:
                                 reply_response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_reply)
@@ -381,6 +378,66 @@ else:
                                 st.text_area("", reply_response.text, height=200, label_visibility="collapsed")
                             except Exception as e:
                                 st.error("Lỗi kết nối AI. Vui lòng thử lại.")
+
+            # ==========================================
+            # TAB 4: AI GIÁM KHẢO LỌC ẢNH
+            # ==========================================
+            with tab4:
+                st.header("🖼️ AI Giám Khảo - Chọn Ảnh 'Hút Khách'")
+                st.markdown("Tải lên 1 loạt ảnh chụp nhà thực tế. AI sẽ soi từng ảnh, chấm điểm thẩm mỹ (ánh sáng, độ rộng, độ sang trọng) và xếp hạng để bạn chọn ra bức ảnh 'Mồi' chốt sale đỉnh nhất.")
+
+                uploaded_files = st.file_uploader("Tải lên danh sách ảnh (Khuyên dùng: 3-5 ảnh/lần):", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+
+                if st.button("🌟 Bắt Đầu Chấm Điểm Ảnh", type="primary"):
+                    if not api_key:
+                        st.warning("⚠️ Vui lòng nhập Gemini API Key ở menu bên trái!")
+                    elif not uploaded_files:
+                        st.warning("⚠️ Bạn chưa tải bức ảnh nào lên kìa!")
+                    else:
+                        with st.spinner(f"AI đang dán mắt soi chi tiết {len(uploaded_files)} bức ảnh..."):
+                            client = genai.Client(api_key=api_key)
+                            results = []
+                            
+                            for file in uploaded_files:
+                                try:
+                                    img = PIL.Image.open(file)
+                                    prompt_image = """
+                                    Bạn là Giám đốc Marketing Bất động sản lão luyện.
+                                    Hãy quan sát bức ảnh này và chấm điểm từ 1 đến 10 về khả năng làm "ảnh mồi" quảng cáo.
+                                    Tiêu chí điểm cao: Nhà sáng sủa, góc chụp rộng, sạch sẽ, nhìn hiện đại hoặc sang trọng.
+                                    Chỉ trả về ĐÚNG 1 JSON định dạng như sau (Tuyệt đối không có text khác):
+                                    {"score": 9, "reason": "Ánh sáng tự nhiên cực tốt, góc chụp khoe được phòng khách rộng và nội thất sang trọng."}
+                                    """
+                                    response = client.models.generate_content(
+                                        model='gemini-2.5-flash',
+                                        contents=[img, prompt_image]
+                                    )
+                                    
+                                    clean_json = response.text.replace('```json', '').replace('```', '').strip()
+                                    data = json.loads(clean_json)
+                                    
+                                    results.append({
+                                        "file_name": file.name, 
+                                        "image": img, 
+                                        "score": data.get("score", 0), 
+                                        "reason": data.get("reason", "Không rõ lý do")
+                                    })
+                                except Exception as e:
+                                    st.error(f"Lỗi khi AI xem ảnh {file.name}: {e}")
+                            
+                            if results:
+                                results.sort(key=lambda x: x['score'], reverse=True)
+                                st.success("🎉 AI đã chấm điểm xong! Dưới đây là Bảng Xếp Hạng ảnh nên dùng làm mồi:")
+                                
+                                cols = st.columns(3)
+                                for i, res in enumerate(results):
+                                    with cols[i % 3]: 
+                                        st.image(res["image"], use_container_width=True)
+                                        if i == 0:
+                                            st.markdown(f"### 🏆 TOP 1 - Điểm: {res['score']}/10")
+                                        else:
+                                            st.markdown(f"**Điểm: {res['score']}/10**")
+                                        st.caption(f"🤖 **AI Nhận xét:** {res['reason']}")
 
         except Exception as e:
             st.error(f"❌ Lỗi đọc dữ liệu Kho Hàng: {e}")
