@@ -251,9 +251,9 @@ else:
             with tab3:
                 st.header("💡 AI Trợ Lý Nội Dung & Giao Tiếp")
                 
-                # --- TÍNH NĂNG 1: TẠO TIN ĐĂNG TỰ ĐỘNG ---
-                st.subheader("📝 1. Tự Động Viết Tin Đăng Đa Nền Tảng (Bảo Mật Vị Trí)")
-                st.markdown("Chọn một căn nhà trong giỏ hàng để AI tự động 'xào' bài viết Marketing theo văn phong chuyên gia, tuyệt đối ẩn vị trí chính xác.")
+                # --- TÍNH NĂNG 1: TẠO TIN ĐĂNG TỰ ĐỘNG (CÓ HỌC VĂN MẪU) ---
+                st.subheader("📝 1. Tự Động Viết Tin Đăng (Few-Shot AI)")
+                st.markdown("Hệ thống tự động phân tích giá/loại nhà, trích xuất văn mẫu thực chiến của Faraland để AI 'nhập hồn' và viết bài.")
                 
                 if len(properties) > 0:
                     house_options = properties['project_name'].tolist()
@@ -263,53 +263,77 @@ else:
                         if not api_key:
                             st.warning("⚠️ Vui lòng nhập Gemini API Key ở menu bên trái!")
                         else:
-                            with st.spinner("AI đang 'múa phím' soạn content đỉnh cao..."):
+                            with st.spinner("AI đang đọc các bí kíp văn mẫu và soạn content..."):
                                 client = genai.Client(api_key=api_key)
                                 
+                                # 1. RÚT TRÍCH THÔNG SỐ CĂN NHÀ
                                 selected_house = properties[properties['project_name'] == selected_house_name].iloc[0]
                                 h_price = selected_house['price'] / 1_000_000_000
                                 h_area = selected_house['area']
                                 h_dist = selected_house['district']
                                 h_floors = selected_house.get('floors', 'N/A')
-                                h_type = selected_house.get('property_type', 'Bất động sản')
+                                h_type = str(selected_house.get('property_type', 'Bất động sản')).lower()
                                 h_front = selected_house.get('MatTien', 'Rộng rãi')
 
+                                # 2. CHỌN ĐÚNG FILE VĂN MẪU THEO PHÂN KHÚC
+                                import os
+                                file_mau = "mau_4_8ty.csv" # Mặc định
+                                
+                                if any(word in h_type for word in ["dòng tiền", "ccmn", "căn hộ dịch vụ", "cho thuê"]):
+                                    file_mau = "mau_dong_tien.csv"
+                                elif h_price >= 20:
+                                    file_mau = "mau_20ty.csv"
+                                elif h_price >= 10:
+                                    file_mau = "mau_10ty.csv"
+                                
+                                # 3. ĐỌC FILE CSV VÀ CHỌN NGẪU NHIÊN 3 BÀI
+                                van_mau_text = ""
+                                if os.path.exists(file_mau):
+                                    try:
+                                        df_mau = pd.read_csv(file_mau)
+                                        # Xóa các dòng bị trống nội dung (Phòng hờ file >20 tỷ đang trống)
+                                        if 'NỘI DUNG' in df_mau.columns:
+                                            df_mau = df_mau.dropna(subset=['NỘI DUNG'])
+                                            if not df_mau.empty:
+                                                # Chọn ngẫu nhiên tối đa 3 bài mẫu
+                                                num_samples = min(3, len(df_mau))
+                                                sample_df = df_mau.sample(num_samples)
+                                                for idx, row in sample_df.iterrows():
+                                                    tieu_de = row.get('TIÊU ĐỀ', '')
+                                                    noi_dung = row.get('NỘI DUNG', '')
+                                                    van_mau_text += f"\n[VÍ DỤ MẪU]:\nTIÊU ĐỀ: {tieu_de}\nNỘI DUNG:\n{noi_dung}\n---\n"
+                                    except Exception as e:
+                                        pass # Nếu lỗi đọc file, bỏ qua và để AI tự viết
+                                
+                                # Nếu file trống hoặc không tìm thấy file, gán câu lệnh mặc định
+                                if not van_mau_text.strip():
+                                    van_mau_text = "Không có ví dụ mẫu cụ thể. Hãy tự viết bằng văn phong đỉnh cao, chuyên nghiệp nhất."
+
+                                # 4. TÍCH HỢP VÀO PROMPT CHO GEMINI
                                 prompt_marketing = f"""
                                 Bạn là Đạt, một chuyên gia môi giới bất động sản lão luyện tại Việt Nam.
-                                Hãy viết bài đăng bán BĐS dựa trên dữ liệu sau:
+                                Hãy viết bài đăng bán BĐS dựa trên dữ liệu thật sau:
                                 - Loại hình: {h_type}
-                                - Khu vực: Quận {h_dist} (TUYỆT ĐỐI KHÔNG ghi địa chỉ hoặc ngõ cụ thể).
+                                - Khu vực: Quận {h_dist} (TUYỆT ĐỐI KHÔNG ghi địa chỉ hoặc ngõ cụ thể, chỉ ghi quận hoặc khu vực lân cận).
                                 - Diện tích: {h_area} m2
                                 - Mặt tiền: {h_front}
                                 - Số tầng: {h_floors}
                                 - Giá bán: {h_price} Tỷ VNĐ
 
-                                YÊU CẦU CỐT LÕI:
-                                1. BẢO MẬT: Chỉ mô tả vị trí theo dạng "khu vực trung tâm", "gần đường lớn", "gần trường/chợ". Nếu input có địa chỉ cụ thể, phải làm mờ ngay lập tức.
-                                2. VĂN PHONG: Tự nhiên, 100% giống người thật, có yếu tố "bán hàng mềm". Tự động điều chỉnh ngôn từ cho phù hợp với phân khúc giá {h_price} tỷ (Cao cấp dùng từ sang trọng, bình dân dùng từ thực tế).
-                                3. CHUYỂN ĐỔI: Gợi sự tò mò, kích thích khách inbox/gọi điện. Chèn các câu dẫn như "Căn này thực sự phù hợp cho...", "Điểm mình thích nhất là...".
+                                DƯỚI ĐÂY LÀ CÁC BÀI VĂN MẪU CỦA CÔNG TY (PHÙ HỢP VỚI PHÂN KHÚC NÀY). 
+                                HÃY ĐỌC KỸ VÀ "BẮT CHƯỚC" 100% VĂN PHONG, CÁCH DÙNG TỪ LÓNG (như 'Sale tụt quần', 'Gà đẻ trứng vàng'...), CÁCH XUỐNG DÒNG VÀ CHÈN ICON CỦA CÁC BÀI NÀY:
+                                
+                                {van_mau_text}
 
-                                CẤU TRÚC BẮT BUỘC:
-                                - TIÊU ĐỀ: [TỪ KHÓA HOT] + [KHU VỰC] + [THÔNG SỐ] + [ĐIỂM MẠNH] + [GIÁ] (Viết hoa, thu hút)
-                                - MỞ BÀI (HOOK): 1-2 câu gây chú ý, đánh trúng insight.
-                                - THÔNG TIN CHÍNH: Gọn gàng, dễ đọc.
-                                - MÔ TẢ CHI TIẾT: Nêu bật ưu điểm, không gian sống, tiềm năng đầu tư/dòng tiền.
-                                - VỊ TRÍ (ẨN): Nhấn mạnh tiện ích, kết nối giao thông.
-                                - PHÙ HỢP VỚI AI: Gia đình, Đầu tư, hay Cho thuê.
-                                - CALL TO ACTION: Kêu gọi liên hệ, tạo khan hiếm ("Sản phẩm hiếm", "Giá tốt nhất phân khúc").
-
-                                ĐẦU RA YÊU CẦU 2 PHIÊN BẢN:
-                                **[PHIÊN BẢN 1: DÀNH CHO FACEBOOK (NGẮN GỌN, NHIỀU ICON)]**
-                                (Viết nội dung vào đây...)
-
-                                ---
-                                **[PHIÊN BẢN 2: DÀNH CHO WEBSITE / BẤT ĐỘNG SẢN .COM (CHI TIẾT, CHUYÊN SÂU)]**
-                                (Viết nội dung vào đây...)
+                                YÊU CẦU CỐT LÕI MỚI:
+                                1. BẢO MẬT: Phải làm mờ vị trí chính xác của căn nhà hiện tại.
+                                2. SÁNG TẠO: Không copy y nguyên ví dụ, mà dùng thông số thật của căn nhà để viết lại theo "cái hồn" của ví dụ.
+                                3. ĐẦU RA: Viết 2 phiên bản (Bản 1: Đăng Facebook ngắn gọn, giật tít, nhiều icon. Bản 2: Đăng Website chi tiết, phân tích sâu về dòng tiền/ở).
                                 """
                                 
                                 try:
                                     marketing_res = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_marketing)
-                                    st.success('Ting ting! Content đã "ra lò":')
+                                    st.success(f'Ting ting! AI đã học xong từ file [{file_mau}] và tạo bài thành công:')
                                     st.markdown(marketing_res.text)
                                 except Exception as e:
                                     st.error(f"Lỗi kết nối AI: {e}")
