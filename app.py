@@ -312,30 +312,39 @@ else:
                                 if not van_mau_text.strip():
                                     van_mau_text = "Không có ví dụ mẫu cụ thể. Hãy tự viết bằng văn phong đỉnh cao, chuyên nghiệp nhất."
 
-                                # 4. TÍCH HỢP VÀO PROMPT CHO GEMINI (ÉP DÙNG GIÁ ĐÃ CHE)
+                                # 4. TÍCH HỢP VÀO PROMPT CHO GEMINI (ÉP KHUÔN XUỐNG DÒNG & THỤT LỀ)
                                 prompt_marketing = f"""
                                 Bạn là Đạt, một siêu cò bất động sản lão luyện tại Việt Nam. Số điện thoại của bạn là: 0886426918.
                                 Hãy viết bài đăng bán BĐS dựa trên dữ liệu thật sau:
                                 - Loại hình: {h_type}
-                                - Khu vực: Quận {h_dist} (TUYỆT ĐỐI KHÔNG ghi địa chỉ hoặc ngõ cụ thể, chỉ ghi quận hoặc khu vực lân cận).
+                                - Khu vực: Quận {h_dist}
                                 - Diện tích: {h_area} m2
                                 - Mặt tiền: {h_front}
                                 - Số tầng: {h_floors}
-                                - Giá bán: {masked_price} Tỷ VNĐ (BẮT BUỘC giữ nguyên định dạng ẩn số này, KHÔNG được phép giải thích hay ghi rõ giá tiền).
+                                - Giá bán: {masked_price} Tỷ VNĐ (BẮT BUỘC giữ nguyên định dạng giá ẩn này).
 
-                                DƯỚI ĐÂY LÀ CÁC BÀI VĂN MẪU CỦA CÔNG TY. HÃY ĐỌC ĐỂ HIỂU "VIBE" VÀ CÁC TỪ LÓNG (Sale tụt quần, Gà đẻ trứng vàng...):
+                                DƯỚI ĐÂY LÀ CÁC BÀI VĂN MẪU ĐỂ BẠN HỌC "VIBE" TỪ LÓNG (Sale tụt quần, Gà đẻ trứng vàng...):
                                 {van_mau_text}
 
                                 YÊU CẦU CỐT LÕI (TUYỆT ĐỐI TUÂN THỦ):
-                                1. SIÊU NGẮN GỌN & GIẬT TÍT: Khách hàng lười đọc. Viết cực kỳ súc tích, đập thẳng thông số vào mắt. KHÔNG CÓ đoạn văn dài lê thê. Tổng toàn bộ bài viết KHÔNG QUÁ 150 TỪ.
-                                2. TRÌNH BÀY BẮT MẮT: Sử dụng nhiều Emoji (🚨, 📍, 🚀, 🏡, 💰, 🎯). In hoa các từ khóa kích thích thị giác (SỐC, ĐỊA CHẤN, SIÊU PHẨM, GÀ ĐẺ TRỨNG VÀNG).
-                                3. BẢO MẬT VỊ TRÍ & GIÁ: Làm mờ vị trí chính xác và giữ nguyên giá ẩn {masked_price} Tỷ để chèo kéo khách gọi điện.
-                                4. BỐ CỤC CHUẨN:
-                                   - Tiêu đề (Giật gân, In hoa, chèn Icon, có giá {masked_price} tỷ)
-                                   - Vị trí (1 câu ngắn)
-                                   - Thông số (Gạch đầu dòng ngắn gọn)
-                                   - Tiềm năng (1-2 câu nhấn mạnh dòng tiền/lãi vốn)
-                                   - Kết bài: BẮT BUỘC chốt đúng nguyên văn câu này: "LH: E Đạt - 0886426918 ( chính chủ k tiếp môi giới )"
+                                1. SIÊU NGẮN GỌN: Tổng toàn bộ bài viết KHÔNG QUÁ 150 TỪ.
+                                2. BỐ CỤC TRÌNH BÀY: Phải có khoảng trắng giữa các phần. Đặc biệt phần thông số phải XUỐNG DÒNG và THỤT LỀ lùi vào trong.
+                                3. BẮT BUỘC TRÌNH BÀY ĐÚNG THEO FORM SAU (Hãy điền nội dung sáng tạo của bạn vào các dấu [...]):
+
+                                🚨🚨 [GIẬT TÍT SỐC: TỪ KHÓA + VỊ TRÍ + GIÁ CHỈ {masked_price} TỶ] 🚨🚨
+                                
+                                📍 Vị trí kim cương: [1 câu mô tả vị trí, tiện ích, không nói địa chỉ cụ thể]
+                                
+                                🏡 SIÊU PHẨM MỚI CỨNG VỚI THÔNG SỐ VÀNG:
+                                &nbsp;&nbsp;&nbsp;&nbsp;👉 Diện tích: {h_area} m² 🤯
+                                &nbsp;&nbsp;&nbsp;&nbsp;👉 Kết cấu: {h_floors} tầng kiên cố, [1 câu ngắn về công năng]
+                                &nbsp;&nbsp;&nbsp;&nbsp;👉 Mặt tiền: {h_front} - [1 câu ngắn về ưu điểm mặt tiền]
+                                &nbsp;&nbsp;&nbsp;&nbsp;💰 GIÁ BÁN SỐC: CHỈ {masked_price} TỶ (Gà đẻ trứng vàng!)
+                                
+                                🎯 Tiềm năng: [1 câu chốt hạ về dòng tiền/lãi vốn]
+                                
+                                LH: E Đạt - 0886426918 ( chính chủ k tiếp môi giới )
+                                """
                                 
                                 ĐẦU RA: Chỉ viết 1 phiên bản duy nhất, chuẩn form đăng Facebook/Zalo ngay lập tức.
                                 """
