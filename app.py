@@ -312,7 +312,7 @@ else:
                                 if not van_mau_text.strip():
                                     van_mau_text = "Không có ví dụ mẫu cụ thể. Hãy tự viết bằng văn phong đỉnh cao, chuyên nghiệp nhất."
 
-                                # 4. TÍCH HỢP VÀO PROMPT CHO GEMINI (ÉP KHUÔN XUỐNG DÒNG & THỤT LỀ)
+                               # 4. TÍCH HỢP VÀO PROMPT CHO GEMINI (ÉP KHUÔN XUỐNG DÒNG & THỤT LỀ)
                                 prompt_marketing = f"""
                                 Bạn là Đạt, một siêu cò bất động sản lão luyện tại Việt Nam. Số điện thoại của bạn là: 0886426918.
                                 Hãy viết bài đăng bán BĐS dựa trên dữ liệu thật sau:
@@ -344,6 +344,8 @@ else:
                                 🎯 Tiềm năng: [1 câu chốt hạ về dòng tiền/lãi vốn]
                                 
                                 LH: E Đạt - 0886426918 ( chính chủ k tiếp môi giới )
+                                
+                                ĐẦU RA: Chỉ viết 1 phiên bản duy nhất, chuẩn form đăng Facebook/Zalo ngay lập tức.
                                 """
                                 
                                 ĐẦU RA: Chỉ viết 1 phiên bản duy nhất, chuẩn form đăng Facebook/Zalo ngay lập tức.
