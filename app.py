@@ -5,7 +5,10 @@ import datetime
 import json
 import re
 import os
+import requests
+from io import BytesIO
 import PIL.Image
+import PyPDF2
 import plotly.express as px
 from sklearn.preprocessing import MinMaxScaler
 from google import genai
@@ -13,7 +16,7 @@ from streamlit_gsheets import GSheetsConnection
 from sqlalchemy import create_engine, text
 
 # ==========================================
-# 1. CẤU HÌNH GIAO DIỆN WEB (MASTER V2.0)
+# 1. CẤU HÌNH GIAO DIỆN WEB (MASTER V3.0)
 # ==========================================
 st.set_page_config(page_title="LFS Pro - Trợ lý Bất động sản", page_icon="🏢", layout="wide")
 
@@ -27,7 +30,7 @@ VALID_PASS = "123456"
 # 2. MÀN HÌNH ĐĂNG NHẬP
 # ==========================================
 if not st.session_state['logged_in']:
-    st.markdown("<h1 style='text-align: center;'>🔐 Hệ thống Quản trị LFS V2.0</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center;'>🔐 Hệ thống Quản trị LFS V3.0</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center;'>Nền tảng Công nghệ Bất động sản Faraland</p>", unsafe_allow_html=True)
     
     col_login1, col_login2, col_login3 = st.columns([1, 1, 1])
@@ -59,7 +62,7 @@ else:
     sheet_url = st.sidebar.text_input("2. Link Google Sheets (Kho Hàng):", type="password")
     db_url = st.sidebar.text_input("3. Supabase URI (Lưu CRM):", type="password")
 
-    st.title("🏢 LFS 2.0 - Trợ lý Ảo AI Toàn Diện")
+    st.title("🏢 LFS 3.0 - Trợ lý Ảo AI Toàn Diện")
     
     # --- HÀM XỬ LÝ DỮ LIỆU THÔNG MINH ---
     def process_image_url(url):
@@ -69,16 +72,42 @@ else:
             if match: return f"https://drive.google.com/uc?id={match.group(1)}"
         return url
 
-    def smart_clean_number(x):
+    def smart_clean_price(x):
         if pd.isna(x): return np.nan
         try:
-            val = float(str(x).replace(',', '').replace(' ', ''))
-            if 0 < val < 1000: return val * 1_000_000_000
-            return val
-        except:
+            nums = re.findall(r'[\d\.]+', str(x).replace(',', '.'))
+            if nums:
+                val = float(nums[0])
+                if 0 < val < 1000: return val * 1_000_000_000
+                return val
             return np.nan
+        except: return np.nan
 
-    # --- KẾT NỐI DATABASE MỚI ---
+    def smart_clean_area(x):
+        if pd.isna(x): return 0
+        try:
+            nums = re.findall(r'[\d\.]+', str(x).replace(',', '.'))
+            if nums:
+                val = float(nums[0])
+                return int(val) if val.is_integer() else val
+            return 0
+        except: return 0
+
+    @st.cache_data
+    def load_sale_scripts(file_path):
+        try:
+            text_content = ""
+            if os.path.exists(file_path):
+                with open(file_path, "rb") as f:
+                    reader = PyPDF2.PdfReader(f)
+                    for page in reader.pages:
+                        text_content += page.extract_text() + "\n"
+                return text_content
+            return "Hãy dùng kỹ năng chốt sale khéo léo nhất."
+        except:
+            return "Hãy dùng kỹ năng chốt sale khéo léo nhất."
+
+    # --- KẾT NỐI DATABASE ---
     @st.cache_data(ttl=30)
     def load_clean_data(url):
         conn = st.connection("gsheets", type=GSheetsConnection)
@@ -93,20 +122,20 @@ else:
         rename_map = {k: v for k, v in rename_map.items() if k in df.columns}
         df = df.rename(columns=rename_map)
         
-        if 'price' in df.columns: df['price'] = df['price'].apply(smart_clean_number)
-        if 'area' in df.columns: df['area'] = df['area'].apply(smart_clean_number)
+        if 'price' in df.columns: df['price'] = df['price'].apply(smart_clean_price)
+        if 'area' in df.columns: df['area'] = df['area'].apply(smart_clean_area)
         if 'floors' in df.columns: df['floors'] = pd.to_numeric(df['floors'], errors='coerce').fillna(1)
         if 'district' not in df.columns: df['district'] = "Chưa rõ"
         if 'property_type' not in df.columns: df['property_type'] = "Chưa phân loại"
         
-        return df.dropna(subset=['price', 'area', 'project_name'])
+        return df.dropna(subset=['price', 'project_name'])
 
     if sheet_url:
         try:
             properties = load_clean_data(sheet_url)
             st.success(f"✅ Đã kết nối Kho Hàng. Đang có {len(properties)} sản phẩm sẵn sàng giao dịch.")
             
-            tab1, tab2, tab3, tab4 = st.tabs(["🚀 AI Khớp Lệnh", "📊 Quản Lý CRM", "💡 AI Content", "🖼️ AI Lọc Ảnh Mồi"])
+            tab1, tab2, tab3, tab4 = st.tabs(["🚀 AI Khớp Lệnh", "📊 Quản Lý CRM", "💡 AI Content & Kịch Bản", "🖼️ AI Lọc Ảnh Mồi"])
             
             # ==========================================
             # TAB 1: PHÒNG ĐIỀU HÀNH & KHỚP LỆNH
@@ -148,7 +177,7 @@ else:
                             client = genai.Client(api_key=api_key)
                             prompt_json = f"""
                             Trích xuất JSON:
-                            {{ "name": "Tên khách (mặc định 'Khách hàng')", "district": "Quận (mặc định 'Bất kỳ')", "budget": Ngân sách tối đa (số nguyên VNĐ. VD 5 tỷ -> 5000000000), "area": Diện tích (Mặc định 30.0), "floors": Số tầng (Mặc định 1) }}
+                            {{ "name": "Tên khách", "district": "Quận (mặc định 'Bất kỳ')", "budget": Ngân sách tối đa (số nguyên VNĐ. VD 5 tỷ -> 5000000000), "area": Diện tích (Mặc định 30.0), "floors": Số tầng (Mặc định 1) }}
                             TIN NHẮN: "{raw_chat}"
                             """
                             try:
@@ -164,7 +193,6 @@ else:
                                 
                                 st.success(f"**🤖 AI bóc tách:** Khách: **{c_name}** | Khu vực: **{c_dist}** | Tài chính: **{c_budg:,.0f}đ** | **{c_area}**m2 | **{c_floors}** Tầng")
                                 
-                                customer_req = pd.DataFrame({'price': [c_budg], 'area': [c_area]})
                                 scaler_price = MinMaxScaler().fit(np.append(properties['price'].values, c_budg).reshape(-1, 1))
                                 scaler_area = MinMaxScaler().fit(np.append(properties['area'].values, c_area).reshape(-1, 1))
 
@@ -208,7 +236,7 @@ else:
                                     except:
                                         crm_msg = "⚠️ Không lưu được CRM (Kiểm tra lại link Supabase)."
 
-                                prompt_zalo = f"Viết tin nhắn Zalo gửi {c_name}. Người gửi Đạt (Môi giới BĐS). Khách tìm nhà {c_budg:,.0f}đ. Có căn {best['project_name']} phù hợp. Tối đa 3 câu, ngắn gọn, rủ đi xem nhà."
+                                prompt_zalo = f"Viết tin nhắn Zalo gửi {c_name}. Người gửi Đạt. Khách tìm nhà {c_budg:,.0f}đ. Có căn {best['project_name']} phù hợp. 3 câu, ngắn gọn, rủ đi xem nhà."
                                 zalo_resp = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_zalo)
 
                                 st.success(f"🎉 Khớp lệnh thành công! {crm_msg}")
@@ -217,14 +245,12 @@ else:
                                     st.write("**📸 Hình ảnh thực tế:**")
                                     img_val = process_image_url(best.get('image_url', ''))
                                     if img_val.startswith("http"): st.image(img_val, use_container_width=True)
-                                    else: st.info("Ảnh gốc AppSheet đang lưu tại Google Drive. Cần cấu hình public để xem.")
+                                    else: st.info("Ảnh gốc đang lưu tại Google Drive.")
                                 with c2:
                                     st.write(f"**🏠 {best['project_name']}**")
                                     st.write(f"📍 **Khu vực:** {best['district']}")
                                     st.write(f"💰 **Giá:** {best['price']/1_000_000_000:.2f} Tỷ VNĐ")
                                     st.write(f"📐 **Diện tích:** {best['area']} m2 - **Tầng:** {best.get('floors', 'N/A')}")
-                                    if 'location' in best and pd.notna(best['location']):
-                                        st.write(f"🌍 **GPS:** `{best['location']}`")
                                     st.write(f"🔥 **Độ phù hợp:** {best['match_score']}%")
                                 with c3:
                                     st.write("**📱 Tin nhắn Zalo:**")
@@ -248,11 +274,12 @@ else:
                 else: st.warning("Nhập Supabase URI để xem CRM.")
 
             # ==========================================
-            # TAB 3: AI CONTENT (FEW-SHOT & ÉP KHUÔN)
+            # TAB 3: AI CONTENT & XỬ LÝ TỪ CHỐI BẰNG KỊCH BẢN
             # ==========================================
             with tab3:
+                # --- PHẦN 1: TẠO TIN ĐĂNG ---
                 st.subheader("📝 1. Tự Động Viết Tin Đăng (Few-Shot AI)")
-                st.markdown("Hệ thống tự động phân tích giá/loại nhà, trích xuất văn mẫu thực chiến để AI 'nhập hồn' và viết bài siêu tốc.")
+                st.markdown("Hệ thống tự động trích xuất văn mẫu thực chiến để AI 'nhập hồn' và viết bài siêu tốc.")
                 
                 if len(properties) > 0:
                     house_options = properties['project_name'].tolist()
@@ -260,12 +287,11 @@ else:
                     
                     if st.button("✨ Viết Bài Đăng Bán Nhà", type="primary"):
                         if not api_key:
-                            st.warning("⚠️ Vui lòng nhập Gemini API Key ở menu bên trái!")
+                            st.warning("⚠️ Vui lòng nhập Gemini API Key!")
                         else:
-                            with st.spinner("AI đang đọc các bí kíp văn mẫu và soạn content..."):
+                            with st.spinner("AI đang đọc văn mẫu và soạn content..."):
                                 client = genai.Client(api_key=api_key)
                                 
-                                # 1. RÚT TRÍCH THÔNG SỐ CĂN NHÀ
                                 selected_house = properties[properties['project_name'] == selected_house_name].iloc[0]
                                 h_price = selected_house['price'] / 1_000_000_000
                                 h_area = selected_house['area']
@@ -274,22 +300,16 @@ else:
                                 h_type = str(selected_house.get('property_type', 'Bất động sản')).lower()
                                 h_front = selected_house.get('MatTien', 'Rộng rãi')
 
-                                # 2. CHE MỜ GIÁ TIỀN THÔNG MINH
-                                if h_price >= 10:
-                                    masked_price = str(int(h_price))[0] + "x.xx"
-                                else:
-                                    masked_price = str(int(h_price)) + ".xx"
+                                # CHE MỜ GIÁ
+                                if h_price >= 10: masked_price = str(int(h_price))[0] + "x.xx"
+                                else: masked_price = str(int(h_price)) + ".xx"
 
-                                # 3. CHỌN ĐÚNG FILE VĂN MẪU THEO PHÂN KHÚC
+                                # TÌM VĂN MẪU
                                 file_mau = "mau_4_8ty.csv"
-                                if any(word in h_type for word in ["dòng tiền", "ccmn", "căn hộ dịch vụ", "cho thuê"]):
-                                    file_mau = "mau_dong_tien.csv"
-                                elif h_price >= 20:
-                                    file_mau = "mau_20ty.csv"
-                                elif h_price >= 10:
-                                    file_mau = "mau_10ty.csv"
+                                if any(word in h_type for word in ["dòng tiền", "ccmn", "căn hộ dịch vụ", "cho thuê"]): file_mau = "mau_dong_tien.csv"
+                                elif h_price >= 20: file_mau = "mau_20ty.csv"
+                                elif h_price >= 10: file_mau = "mau_10ty.csv"
                                 
-                                # 4. ĐỌC FILE CSV VÀ CHỌN NGẪU NHIÊN BÀI MẪU
                                 van_mau_text = ""
                                 if os.path.exists(file_mau):
                                     try:
@@ -297,147 +317,143 @@ else:
                                         if 'NỘI DUNG' in df_mau.columns:
                                             df_mau = df_mau.dropna(subset=['NỘI DUNG'])
                                             if not df_mau.empty:
-                                                num_samples = min(3, len(df_mau))
-                                                sample_df = df_mau.sample(num_samples)
-                                                for idx, row in sample_df.iterrows():
-                                                    tieu_de = row.get('TIÊU ĐỀ', '')
-                                                    noi_dung = row.get('NỘI DUNG', '')
-                                                    van_mau_text += f"\n[VÍ DỤ MẪU]:\nTIÊU ĐỀ: {tieu_de}\nNỘI DUNG:\n{noi_dung}\n---\n"
-                                    except Exception as e:
-                                        pass
+                                                sample_df = df_mau.sample(min(3, len(df_mau)))
+                                                for _, row in sample_df.iterrows():
+                                                    van_mau_text += f"\n[VÍ DỤ]:\nTIÊU ĐỀ: {row.get('TIÊU ĐỀ', '')}\nNỘI DUNG:\n{row['NỘI DUNG']}\n---\n"
+                                    except: pass
                                 
-                                if not van_mau_text.strip():
-                                    van_mau_text = "Không có ví dụ mẫu cụ thể. Hãy tự viết bằng văn phong đỉnh cao, chuyên nghiệp nhất."
+                                if not van_mau_text.strip(): van_mau_text = "Tự viết bằng văn phong đỉnh cao."
 
-                                # 5. PROMPT CHUẨN ÉP KHUÔN THỤT LỀ
                                 prompt_marketing = f"""
-                                Bạn là Đạt, một siêu cò bất động sản lão luyện tại Việt Nam. Số điện thoại của bạn là: 0886426918.
-                                Hãy viết bài đăng bán BĐS dựa trên dữ liệu thật sau:
-                                - Loại hình: {h_type}
-                                - Khu vực: Quận {h_dist}
-                                - Diện tích: {h_area} m2
-                                - Mặt tiền: {h_front}
-                                - Số tầng: {h_floors}
-                                - Giá bán: {masked_price} Tỷ VNĐ (BẮT BUỘC giữ nguyên định dạng giá ẩn này).
+                                Bạn là Đạt, một siêu cò bất động sản lão luyện. SĐT: 0886426918.
+                                - Loại hình: {h_type} | Khu vực: Quận {h_dist} | Diện tích: {h_area} m2 | Mặt tiền: {h_front} | Số tầng: {h_floors} | Giá: {masked_price} Tỷ.
 
-                                DƯỚI ĐÂY LÀ CÁC BÀI VĂN MẪU ĐỂ BẠN HỌC "VIBE" TỪ LÓNG:
+                                BÀI VĂN MẪU (Bắt chước Vibe):
                                 {van_mau_text}
 
-                                YÊU CẦU CỐT LÕI (TUYỆT ĐỐI TUÂN THỦ):
-                                1. SIÊU NGẮN GỌN: Tổng toàn bộ bài viết KHÔNG QUÁ 150 TỪ.
-                                2. BỐ CỤC TRÌNH BÀY: Phải có khoảng trắng giữa các phần. Đặc biệt phần thông số phải XUỐNG DÒNG và THỤT LỀ lùi vào trong.
-                                3. BẮT BUỘC TRÌNH BÀY ĐÚNG THEO FORM SAU (Hãy điền nội dung sáng tạo của bạn vào các dấu [...]):
+                                YÊU CẦU:
+                                1. SIÊU NGẮN GỌN (< 150 từ).
+                                2. BẮT BUỘC TRÌNH BÀY ĐÚNG FORM SAU VÀ GIỮ NGUYÊN KHOẢNG TRẮNG ĐỂ THỤT LỀ:
 
                                 🚨🚨 [GIẬT TÍT SỐC: TỪ KHÓA + VỊ TRÍ + GIÁ CHỈ {masked_price} TỶ] 🚨🚨
                                 
-                                📍 Vị trí kim cương: [1 câu mô tả vị trí, tiện ích, không nói địa chỉ cụ thể]
+                                📍 Vị trí kim cương: [1 câu mô tả ẩn vị trí]
                                 
                                 🏡 SIÊU PHẨM MỚI CỨNG VỚI THÔNG SỐ VÀNG:
                                 &nbsp;&nbsp;&nbsp;&nbsp;👉 Diện tích: {h_area} m² 🤯
-                                &nbsp;&nbsp;&nbsp;&nbsp;👉 Kết cấu: {h_floors} tầng kiên cố, [1 câu ngắn về công năng]
-                                &nbsp;&nbsp;&nbsp;&nbsp;👉 Mặt tiền: {h_front} - [1 câu ngắn về ưu điểm mặt tiền]
+                                &nbsp;&nbsp;&nbsp;&nbsp;👉 Kết cấu: {h_floors} tầng kiên cố, [công năng]
+                                &nbsp;&nbsp;&nbsp;&nbsp;👉 Mặt tiền: {h_front} - [ưu điểm mặt tiền]
                                 &nbsp;&nbsp;&nbsp;&nbsp;💰 GIÁ BÁN SỐC: CHỈ {masked_price} TỶ (Gà đẻ trứng vàng!)
                                 
                                 🎯 Tiềm năng: Cam kết dòng tiền ổn định, tiềm năng tăng giá cao trong tương lai gần!
                                 
                                 LH: E Đạt - 0886426918 ( chính chủ k tiếp môi giới )
-                                
-                                ĐẦU RA: Chỉ viết 1 phiên bản duy nhất, chuẩn form đăng Facebook/Zalo ngay lập tức.
                                 """
-                                
                                 try:
                                     marketing_res = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_marketing)
-                                    st.success(f"Ting ting! AI đã học xong và tạo bài SIÊU NGẮN (Giá ẩn: {masked_price} Tỷ) thành công:")
+                                    st.success(f"Ting ting! Đã tạo bài (Giá ẩn: {masked_price} Tỷ):")
                                     st.markdown(marketing_res.text)
-                                except Exception as e:
-                                    st.error(f"Lỗi kết nối AI: {e}")
-                else:
-                    st.info("Kho hàng đang trống. Hệ thống cần dữ liệu để viết bài.")
-
+                                except Exception as e: st.error(f"Lỗi kết nối AI: {e}")
+                
                 st.divider()
 
-                # --- AI XỬ LÝ TỪ CHỐI ---
-                st.subheader("💬 2. AI Gợi Ý Phản Hồi Khách Hàng")
-                cust_msg = st.text_area("1. Khách hàng vừa nhắn gì cho bạn?", placeholder="VD: Em ơi giá này hơi cao...")
-                agent_intent = st.text_input("2. Ý định trả lời của bạn (Tùy chọn):", placeholder="VD: Giải thích căn lô góc rất hiếm...")
+                # --- PHẦN 2: AI XỬ LÝ TỪ CHỐI BẰNG 90 KỊCH BẢN ---
+                st.subheader("💬 2. AI Xử Lý Từ Chối (Được trang bị 90 Kịch Bản Chốt Sale)")
+                st.markdown("Khi khách hàng do dự, AI sẽ tự động lục tìm trong '90 Kịch Bản Chốt Sale Thần Tốc' để đưa ra cách xử lý khéo léo nhất.")
+                
+                cust_msg = st.text_area("1. Khách hàng vừa nhắn gì cho bạn?", placeholder="VD: Để anh bàn lại với vợ đã / Giá này anh thấy hơi đắt em ạ...")
+                agent_intent = st.text_input("2. Ý định trả lời của bạn (Tùy chọn):", placeholder="VD: Thuyết phục đi xem nhà ngay hôm nay kẻo khách khác chốt mất...")
                 
                 if st.button("✨ Viết Câu Trả Lời Giúp Tôi"):
                     if not api_key: st.warning("Vui lòng nhập Gemini API Key!")
                     elif not cust_msg: st.warning("Bạn chưa dán tin nhắn của khách kìa!")
                     else:
-                        with st.spinner("AI đang soạn văn mẫu chốt sale..."):
+                        with st.spinner("AI đang lật mở bí kíp 90 Kịch Bản Chốt Sale và soạn văn mẫu..."):
                             client = genai.Client(api_key=api_key)
+                            bi_kip_text = load_sale_scripts("kich_ban.pdf")
+                            
                             prompt_reply = f"""
-                            Bạn là Đạt, môi giới BĐS tại công ty Faraland (Việt Nam).
+                            Bạn là Đạt, một chuyên gia chốt sale Bất động sản lão luyện tại Faraland (Việt Nam).
+                            
+                            DƯỚI ĐÂY LÀ CUỐN BÍ KÍP "90 KỊCH BẢN CHỐT SALE THẦN TỐC" CỦA BẠN:
+                            {bi_kip_text}
+
+                            TÌNH HUỐNG HIỆN TẠI:
                             Khách nhắn: "{cust_msg}". Định hướng của tôi: "{agent_intent}"
-                            Nhiệm vụ: Viết tin nhắn Zalo phản hồi, khéo léo xử lý từ chối, súc tích, chốt sale bằng cách hẹn đi xem nhà.
+
+                            NHIỆM VỤ CỦA BẠN:
+                            1. Đối chiếu xem tin nhắn thuộc tình huống từ chối nào trong Bí Kíp.
+                            2. Sử dụng chiến thuật/lời thoại trong bí kíp để viết 1 tin nhắn Zalo phản hồi.
+                            3. Viết cực kỳ tự nhiên, súc tích (Tối đa 4 câu), khéo léo đánh vào tâm lý dồn khách hẹn đi xem nhà hoặc chốt cọc.
                             """
                             try:
                                 reply_response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt_reply)
-                                st.success("Văn mẫu phản hồi Zalo:")
+                                st.success("💡 Tuyệt chiêu phản hồi (Áp dụng từ Bí kíp):")
                                 st.text_area("", reply_response.text, height=200, label_visibility="collapsed")
-                            except Exception as e:
-                                st.error("Lỗi kết nối AI. Vui lòng thử lại.")
+                            except Exception as e: st.error("Lỗi kết nối AI.")
 
             # ==========================================
             # TAB 4: AI GIÁM KHẢO LỌC ẢNH
             # ==========================================
             with tab4:
                 st.header("🖼️ AI Giám Khảo - Chọn Ảnh 'Hút Khách'")
-                st.markdown("Tải lên 1 loạt ảnh chụp nhà thực tế. AI sẽ soi từng ảnh, chấm điểm thẩm mỹ (ánh sáng, độ rộng, độ sang trọng) và xếp hạng để bạn chọn ra bức ảnh 'Mồi' chốt sale đỉnh nhất.")
+                option_anh = st.radio("Nguồn ảnh:", ["Tải lên từ máy", "Lấy từ Database"], horizontal=True)
+                images_to_grade = []
 
-                uploaded_files = st.file_uploader("Tải lên danh sách ảnh (Khuyên dùng: 3-5 ảnh/lần):", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+                if option_anh == "Tải lên từ máy":
+                    uploaded_files = st.file_uploader("Tải lên danh sách ảnh:", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+                    if uploaded_files:
+                        for f in uploaded_files: images_to_grade.append({"name": f.name, "img": PIL.Image.open(f)})
+                else:
+                    if len(properties) > 0:
+                        house_options = properties['project_name'].tolist()
+                        selected_house_name = st.selectbox("🔍 Chọn Bất động sản cần lấy ảnh:", house_options)
+                        selected_house = properties[properties['project_name'] == selected_house_name].iloc[0]
+                        img_cols = [c for c in properties.columns if "Anh" in c or c in ["image_url", "LinkAnh"]]
+                        
+                        if st.button("📥 Hút Ảnh từ Database"):
+                            count_found = 0
+                            for col in img_cols:
+                                val = process_image_url(str(selected_house.get(col, "")))
+                                if val.startswith("http"):
+                                    try:
+                                        res = requests.get(val)
+                                        images_to_grade.append({"name": col, "img": PIL.Image.open(BytesIO(res.content))})
+                                        count_found += 1
+                                    except: pass
+                            if count_found > 0: st.success(f"✅ Đã hút thành công {count_found} ảnh!")
+                            else: st.warning("⚠️ Không tìm thấy link ảnh (http) cho căn nhà này.")
+                    else: st.warning("Kho hàng đang trống!")
+
+                st.divider()
 
                 if st.button("🌟 Bắt Đầu Chấm Điểm Ảnh", type="primary"):
-                    if not api_key:
-                        st.warning("⚠️ Vui lòng nhập Gemini API Key ở menu bên trái!")
-                    elif not uploaded_files:
-                        st.warning("⚠️ Bạn chưa tải bức ảnh nào lên kìa!")
+                    if not api_key: st.warning("⚠️ Nhập API Key!")
+                    elif not images_to_grade: st.warning("⚠️ Chưa có ảnh!")
                     else:
-                        with st.spinner(f"AI đang dán mắt soi chi tiết {len(uploaded_files)} bức ảnh..."):
+                        with st.spinner("AI đang chấm điểm..."):
                             client = genai.Client(api_key=api_key)
                             results = []
-                            
-                            for file in uploaded_files:
+                            for item in images_to_grade:
                                 try:
-                                    img = PIL.Image.open(file)
                                     prompt_image = """
-                                    Bạn là Giám đốc Marketing Bất động sản lão luyện.
-                                    Hãy quan sát bức ảnh này và chấm điểm từ 1 đến 10 về khả năng làm "ảnh mồi" quảng cáo.
-                                    Tiêu chí điểm cao: Nhà sáng sủa, góc chụp rộng, sạch sẽ, nhìn hiện đại hoặc sang trọng.
-                                    Chỉ trả về ĐÚNG 1 JSON định dạng như sau (Tuyệt đối không có text khác):
-                                    {"score": 9, "reason": "Ánh sáng tự nhiên cực tốt, góc chụp khoe được phòng khách rộng và nội thất sang trọng."}
+                                    Chấm điểm thẩm mỹ ảnh BĐS làm "ảnh mồi" (1-10). Tiêu chí: Sáng sủa, góc rộng, hiện đại.
+                                    Chỉ trả JSON: {"score": 9, "reason": "Ánh sáng tốt..."}
                                     """
-                                    response = client.models.generate_content(
-                                        model='gemini-2.5-flash',
-                                        contents=[img, prompt_image]
-                                    )
-                                    
-                                    clean_json = response.text.replace('```json', '').replace('```', '').strip()
-                                    data = json.loads(clean_json)
-                                    
-                                    results.append({
-                                        "file_name": file.name, 
-                                        "image": img, 
-                                        "score": data.get("score", 0), 
-                                        "reason": data.get("reason", "Không rõ lý do")
-                                    })
-                                except Exception as e:
-                                    st.error(f"Lỗi khi AI xem ảnh {file.name}: {e}")
+                                    response = client.models.generate_content(model='gemini-2.5-flash', contents=[item["img"], prompt_image])
+                                    data = json.loads(response.text.replace('```json', '').replace('```', '').strip())
+                                    results.append({"name": item["name"], "img": item["img"], "score": data.get("score", 0), "reason": data.get("reason", "")})
+                                except Exception as e: st.error(f"Lỗi: {e}")
                             
                             if results:
                                 results.sort(key=lambda x: x['score'], reverse=True)
-                                st.success("🎉 AI đã chấm điểm xong! Dưới đây là Bảng Xếp Hạng ảnh nên dùng làm mồi:")
-                                
+                                st.success("🎉 Bảng Xếp Hạng ảnh mồi:")
                                 cols = st.columns(3)
                                 for i, res in enumerate(results):
                                     with cols[i % 3]: 
-                                        st.image(res["image"], use_container_width=True)
-                                        if i == 0:
-                                            st.markdown(f"### 🏆 TOP 1 - Điểm: {res['score']}/10")
-                                        else:
-                                            st.markdown(f"**Điểm: {res['score']}/10**")
-                                        st.caption(f"🤖 **AI Nhận xét:** {res['reason']}")
+                                        st.image(res["img"], use_container_width=True)
+                                        st.markdown(f"**{res['name']}** | ⭐ **{res['score']}/10**")
+                                        st.caption(f"🤖 **Nhận xét:** {res['reason']}")
 
         except Exception as e:
-            st.error(f"❌ Lỗi đọc dữ liệu Kho Hàng: {e}")
+            st.error(f"❌ Lỗi đọc dữ liệu: {e}")
